@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp 練習群組管理表</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+  <!--
+    ============================================================
+    Firebase 設定（先建好架構，之後你自己填入 config 並打開開關即可）
+    ============================================================
+    步驟：
+    1. 到 https://console.firebase.google.com/ 建立專案 → 新增「網頁應用程式」
+       → 複製它給你的 firebaseConfig（下面 script 區塊裡有對應的空物件）
+    2. 到 Firestore Database → 建立資料庫
+    3. 把下面這兩行 <script type="module"> 的註解拿掉（取消註解）
+    4. 到最下方主要 <script> 區塊，找到 FIREBASE_ENABLED，改成 true
+    5. 到 initFirebaseConfig() 裡把 apiKey 等欄位換成你自己的值
+    目前這兩行是註解狀態，不會發送任何網路請求，不影響現有 localStorage 版本運作。
+  -->
+  <!--
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc };
+  </script>
+  -->
+
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      margin: 20px;
+      background-color: #f8f9fa;
+      color: #000;
+    }
+    .control-panel {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    input, select, button {
+      padding: 6px 10px;
+      margin-right: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover { background-color: #45a049; }
+    button.secondary { background-color: #6c757d; }
+    button.secondary:hover { background-color: #5a6268; }
+    button.info-btn { background-color: #2c7be5; }
+    button.info-btn:hover { background-color: #1a5fc4; }
+    .text-muted { font-size: 0.9em; color: #666; margin-top: 10px; display: block; }
+
+    /* 試算表容器：限制高度才能讓 sticky top 生效並產生垂直捲動 */
+    .sheet-container {
+      width: 100%;
+      max-height: 75vh;
+      overflow: auto;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    table {
+      border-collapse: collapse;
+      white-space: nowrap;
+      min-width: 100%;
+    }
+    th, td {
+      border: 1px solid #b0b0b0;
+      padding: 5px 10px;
+      text-align: center;
+      height: 30px;
+      min-width: 80px;
+      user-select: none;
+    }
+
+    th {
+      background-color: #9fc5e8;
+      font-weight: normal;
+    }
+
+    /* 凍結表頭列（第6點：週次名稱那一列也凍結） */
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+    }
+
+    /* 凍結左側三列 */
+    .sticky-col-1 { position: sticky; left: 0; z-index: 2; width: 40px; min-width: 40px; background-color: #fff; }
+    .sticky-col-2 { position: sticky; left: 40px; z-index: 2; width: 120px; min-width: 120px; background-color: #fff; }
+    .sticky-col-3 { position: sticky; left: 160px; z-index: 2; width: 80px; min-width: 80px; background-color: #fff; }
+
+    /* 左上角三格：同時凍結上方 + 左側，z-index 要最高 */
+    th.sticky-col-1, th.sticky-col-2, th.sticky-col-3 {
+      z-index: 5;
+      background-color: #9fc5e8;
+    }
+
+    .active-row .sticky-col-1 { background-color: #f4cccc; }
+    .active-row .sticky-col-2, .active-row .sticky-col-3 { background-color: #fff2cc; }
+
+    .exited-row .sticky-col-2 { background-color: #f4cccc; }
+    .exited-row .sticky-col-1, .exited-row .sticky-col-3 { background-color: #fff; }
+
+    .cell-clickable { cursor: pointer; }
+    .cell-clickable:hover { background-color: #f1f1f1; }
+    .bg-yellow-cell { background-color: #ffff00 !important; }
+
+    .divider-row td {
+      border-left: none;
+      border-right: none;
+      height: 40px;
+      background-color: #f8f9fa;
+    }
+
+    /* 成員姓名可點擊跳轉 */
+    .member-link {
+      cursor: pointer;
+      color: #1155cc;
+      text-decoration: underline;
+    }
+    .member-link:hover { color: #073b8a; }
+
+    /* 週次表頭的編輯/刪除按鈕 */
+    .week-header-cell { position: relative; }
+    .week-name { display: block; margin-bottom: 3px; }
+    .week-actions { display: flex; justify-content: center; gap: 4px; }
+    .week-actions span {
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0 3px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.6);
+    }
+    .week-actions span:hover { background: rgba(255,255,255,0.95); }
+
+    /* 個別頁面（成員統計 / 成員資訊）共用樣式 */
+    .page-container {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .stat-cards { display: flex; gap: 15px; flex-wrap: wrap; margin: 15px 0; }
+    .stat-card {
+      background: #f1f6fb;
+      border: 1px solid #cfe0f0;
+      border-radius: 6px;
+      padding: 12px 18px;
+      min-width: 110px;
+      text-align: center;
+    }
+    .stat-card .num { font-size: 1.5em; font-weight: bold; color: #1a5fc4; }
+    .stat-card .label { font-size: 0.85em; color: #555; margin-top: 3px; }
+
+    .profile-grid {
+      display: grid;
+      grid-template-columns: max-content 1fr;
+      gap: 8px 15px;
+      max-width: 500px;
+      margin: 15px 0;
+    }
+    .profile-grid label { font-weight: bold; color: #333; }
+    .profile-grid input { width: 100%; box-sizing: border-box; margin: 0; }
+
+    .info-table-wrap { overflow-x: auto; margin-top: 10px; }
+    .info-table { border-collapse: collapse; width: 100%; }
+    .info-table th, .info-table td { border: 1px solid #b0b0b0; padding: 6px 10px; text-align: center; }
+    .info-table th { background-color: #9fc5e8; }
+    .info-table input { width: 90px; box-sizing: border-box; }
+    .info-table input[type="number"] { width: 60px; }
+    .section-title { margin-top: 30px; margin-bottom: 8px; color: #333; }
+  </style>
+</head>
+<body>
+  <div id="app">
+
+    <!-- ============ 頁面一：主要試算表 ============ -->
+    <div v-if="currentPage === 'main'">
+      <div class="control-panel">
+        <strong>新增欄位：</strong>
+        <input type="text" v-model="newWeek" placeholder="例: 8/10 語音" @keyup.enter="addWeek">
+        <button @click="addWeek">新增練習周次</button>
+
+        <strong style="margin-left: 20px;">新增人員：</strong>
+        <input type="text" v-model="newMember" placeholder="輸入姓名" @keyup.enter="addMember">
+        <button @click="addMember">加入新成員</button>
+
+        <button class="info-btn" style="margin-left: 20px;" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
+
+        <span class="text-muted">操作提示：點擊格子可依序切換 <strong>👍(1則) ➔ 👍👍(2則) ➔ 👍👍👍(3則) ➔ 🟨(黃牌) ➔ 🟥(紅牌) ➔ 空白</strong>。點擊 🟥 時會自動觸發退群名單。點擊成員姓名可查看個人統計。週次欄位右上角 ✏️ 可改名、🗑 可刪除該欄位。</span>
+      </div>
+
+      <div class="sheet-container">
+        <table>
+          <thead>
+            <tr>
+              <th class="sticky-col-1"></th>
+              <th class="sticky-col-2">👍 🟥 🟨</th>
+              <th class="sticky-col-3">自我介紹</th>
+              <th v-for="week in weeks" :key="week.id" class="week-header-cell">
+                <span class="week-name">{{ week.name }}</span>
+                <span class="week-actions">
+                  <span @click="editWeek(week)" title="修改週次名稱">✏️</span>
+                  <span @click="deleteWeek(week)" title="刪除此週次">🗑</span>
+                </span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- 活躍成員區塊 -->
+            <tr v-for="(member, index) in activeMembers" :key="member.id" class="active-row">
+              <td class="sticky-col-1">{{ index + 1 }}</td>
+              <td class="sticky-col-2 member-link" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
+              <td class="sticky-col-3 cell-clickable" @click="toggleIntro(member)">
+                {{ member.intro ? '👍' : '' }}
+              </td>
+              <td v-for="week in weeks" :key="week.id"
+                  class="cell-clickable"
+                  :class="{'bg-yellow-cell': member.records[week.id] === '🟨'}"
+                  @click="toggleRecord(member, week.id)">
+                {{ member.records[week.id] || '' }}
+              </td>
+            </tr>
+
+            <!-- 分隔行 -->
+            <tr class="divider-row">
+              <td :colspan="weeks.length + 3"></td>
+            </tr>
+
+            <!-- 退出成員區塊（修改：獨立欄位顯示退出日期/原因，不再借用週次欄位） -->
+            <tr v-for="member in exitedMembers" :key="member.id" class="exited-row">
+              <td class="sticky-col-1"></td>
+              <td class="sticky-col-2 member-link" style="cursor: pointer;" @click="goToMemberDetail(member.id)" title="點擊查看詳情">{{ member.name }}</td>
+              <td class="sticky-col-3">{{ member.intro ? '👍' : '' }}</td>
+              <td :colspan="weeks.length" style="text-align:left; color:#a94442;">
+                退群時間：{{ member.exitDate || '未記錄' }}　｜　退群原因：{{ member.exitReason || '未記錄' }}
+                <span class="member-link" style="margin-left:12px;" @click="restoreMember(member)">【恢復為活躍成員】</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ 頁面二：個別成員統計 ============ -->
+    <div v-if="currentPage === 'memberDetail' && selectedMember" class="page-container">
+      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <h2>{{ selectedMember.name }} 的個人紀錄</h2>
+
+      <div class="profile-grid">
+        <label>國籍</label><input type="text" v-model="selectedMember.nationality" placeholder="例: 西班牙">
+        <label>年齡</label><input type="number" v-model="selectedMember.age" placeholder="例: 25">
+        <label>入群時間</label><input type="date" v-model="selectedMember.joinDate">
+        <template v-if="selectedMember.status === 'exited'">
+          <label>退群時間</label><input type="text" v-model="selectedMember.exitDate">
+          <label>退群原因</label><input type="text" v-model="selectedMember.exitReason">
+        </template>
+      </div>
+
+      <div class="stat-cards">
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.total }}</div><div class="label">累計語音則數</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.attended }} / {{ weeks.length }}</div><div class="label">參與週數</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.rate }}%</div><div class="label">出席率</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.yellow }}</div><div class="label">🟨 黃牌次數</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.red }}</div><div class="label">🟥 紅牌次數</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMember.intro ? '已完成' : '未完成' }}</div><div class="label">自我介紹</div></div>
+      </div>
+
+      <h3 class="section-title">每週紀錄明細</h3>
+      <table class="info-table">
+        <thead>
+          <tr><th>週次</th><th>紀錄</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="week in weeks" :key="week.id">
+            <td>{{ week.name }}</td>
+            <td>{{ selectedMember.records[week.id] || '（無紀錄）' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ============ 頁面三：成員資訊總覽 ============ -->
+    <div v-if="currentPage === 'memberInfo'" class="page-container">
+      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <h2>成員資訊總覽</h2>
+
+      <h3 class="section-title">活躍成員（{{ activeMembers.length }} 人）</h3>
+      <div class="info-table-wrap">
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>姓名</th><th>國籍</th><th>年齡</th><th>入群時間</th>
+              <th>累計語音則數</th><th>參與週數</th><th>出席率</th><th>🟨</th><th>🟥</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="m in activeMemberInfoList" :key="m.member.id">
+              <td class="member-link" @click="goToMemberDetail(m.member.id)">{{ m.member.name }}</td>
+              <td><input type="text" v-model="m.member.nationality" placeholder="國籍"></td>
+              <td><input type="number" v-model="m.member.age" placeholder="年齡"></td>
+              <td><input type="date" v-model="m.member.joinDate"></td>
+              <td>{{ m.stats.total }}</td>
+              <td>{{ m.stats.attended }} / {{ weeks.length }}</td>
+              <td>{{ m.stats.rate }}%</td>
+              <td>{{ m.stats.yellow }}</td>
+              <td>{{ m.stats.red }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="section-title">退出成員（{{ exitedMembers.length }} 人）</h3>
+      <div class="info-table-wrap">
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>姓名</th><th>國籍</th><th>年齡</th><th>入群時間</th>
+              <th>退群時間</th><th>退群原因</th>
+              <th>累計語音則數</th><th>🟨</th><th>🟥</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="m in exitedMemberInfoList" :key="m.member.id">
+              <td class="member-link" @click="goToMemberDetail(m.member.id)">{{ m.member.name }}</td>
+              <td><input type="text" v-model="m.member.nationality" placeholder="國籍"></td>
+              <td><input type="number" v-model="m.member.age" placeholder="年齡"></td>
+              <td><input type="date" v-model="m.member.joinDate"></td>
+              <td><input type="text" v-model="m.member.exitDate"></td>
+              <td><input type="text" v-model="m.member.exitReason"></td>
+              <td>{{ m.stats.total }}</td>
+              <td>{{ m.stats.yellow }}</td>
+              <td>{{ m.stats.red }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, watch } = Vue;
+
+    // ============================================================
+    // Firebase 開關（第3點：架構先建好，之後你自己接上）
+    // 目前為 false，代表資料仍完全存在 localStorage，不會連線。
+    // 之後要啟用時：把下面設成 true，並在 initFirebaseConfig() 填入你的設定，
+    // 同時記得把 <head> 裡那段 <script type="module"> 的註解拿掉。
+    // ============================================================
+    const FIREBASE_ENABLED = false;
+
+    function initFirebaseConfig() {
+      // 到 Firebase 主控台 → 專案設定 → 你的應用程式 → SDK 設定與程式碼，複製貼上這裡
+      return {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+      };
+    }
+
+    let firebaseDb = null;
+    async function ensureFirebase() {
+      if (!FIREBASE_ENABLED || firebaseDb) return firebaseDb;
+      if (!window.__firebaseModules) {
+        console.warn('Firebase SDK 尚未載入，請確認 <head> 裡的 <script type="module"> 已取消註解。');
+        return null;
+      }
+      const { initializeApp, getFirestore } = window.__firebaseModules;
+      const app = initializeApp(initFirebaseConfig());
+      firebaseDb = getFirestore(app);
+      return firebaseDb;
+    }
+
+    // 之後要打開雲端同步時，會呼叫這兩個函式把資料寫進 Firestore
+    // 集合結構建議：collection "whatsappGroup" → doc "weeks"（存 weeks 陣列）
+    //                                        → doc "members"（存 members 陣列）
+    async function saveWeeksToFirebase(weeksData) {
+      const db = await ensureFirebase();
+      if (!db) return;
+      const { doc, setDoc } = window.__firebaseModules;
+      await setDoc(doc(db, 'whatsappGroup', 'weeks'), { data: weeksData });
+    }
+    async function saveMembersToFirebase(membersData) {
+      const db = await ensureFirebase();
+      if (!db) return;
+      const { doc, setDoc } = window.__firebaseModules;
+      await setDoc(doc(db, 'whatsappGroup', 'members'), { data: membersData });
+    }
+    async function loadFromFirebase() {
+      const db = await ensureFirebase();
+      if (!db) return null;
+      const { doc, getDoc } = window.__firebaseModules;
+      const weeksSnap = await getDoc(doc(db, 'whatsappGroup', 'weeks'));
+      const membersSnap = await getDoc(doc(db, 'whatsappGroup', 'members'));
+      return {
+        weeks: weeksSnap.exists() ? weeksSnap.data().data : null,
+        members: membersSnap.exists() ? membersSnap.data().data : null
+      };
+    }
+    // ============================================================
+
+    createApp({
+      setup() {
+        const savedWeeks = localStorage.getItem('sheetWeeks');
+        const savedMembers = localStorage.getItem('sheetMembers');
+
+        const weeks = ref(savedWeeks ? JSON.parse(savedWeeks) : [
+          { id: 'w_demo1', name: '7/20 很熱' }
+        ]);
+
+        const members = ref(savedMembers ? JSON.parse(savedMembers) : [
+          { id: 'm1', name: 'Pablo', status: 'active', intro: true, records: {'w_demo1': '👍'} }
+        ]);
+
+        // 資料遷移：舊資料補上新增的欄位，避免 undefined
+        members.value.forEach(m => {
+          if (m.nationality === undefined) m.nationality = '';
+          if (m.age === undefined) m.age = '';
+          if (m.joinDate === undefined) m.joinDate = '';
+          if (m.exitDate === undefined) m.exitDate = '';
+          if (m.exitReason === undefined) m.exitReason = '';
+        });
+
+        watch(weeks, (newVal) => {
+          localStorage.setItem('sheetWeeks', JSON.stringify(newVal));
+          if (FIREBASE_ENABLED) saveWeeksToFirebase(newVal);
+        }, { deep: true });
+
+        watch(members, (newVal) => {
+          localStorage.setItem('sheetMembers', JSON.stringify(newVal));
+          if (FIREBASE_ENABLED) saveMembersToFirebase(newVal);
+        }, { deep: true });
+
+        const newWeek = ref('');
+        const newMember = ref('');
+
+        // 頁面切換狀態（第4、7點：用同一個檔案內切換頁面，資料才能共用）
+        const currentPage = ref('main'); // 'main' | 'memberDetail' | 'memberInfo'
+        const selectedMemberId = ref(null);
+
+        const activeMembers = computed(() => members.value.filter(m => m.status === 'active'));
+        const exitedMembers = computed(() => members.value.filter(m => m.status === 'exited'));
+
+        const selectedMember = computed(() =>
+          members.value.find(m => m.id === selectedMemberId.value) || null
+        );
+
+        // 統計計算：累計語音則數、黃牌、紅牌、參與週數、出席率
+        function computeStats(member) {
+          let total = 0, yellow = 0, red = 0, attended = 0;
+          weeks.value.forEach(w => {
+            const r = member.records[w.id];
+            if (r === '👍') { total += 1; attended++; }
+            else if (r === '👍👍') { total += 2; attended++; }
+            else if (r === '👍👍👍') { total += 3; attended++; }
+            else if (r === '🟨') { yellow++; attended++; }
+            else if (r === '🟥') { red++; attended++; }
+          });
+          const rate = weeks.value.length ? Math.round((attended / weeks.value.length) * 100) : 0;
+          return { total, yellow, red, attended, rate };
+        }
+
+        const selectedMemberStats = computed(() =>
+          selectedMember.value ? computeStats(selectedMember.value) : { total: 0, yellow: 0, red: 0, attended: 0, rate: 0 }
+        );
+
+        const activeMemberInfoList = computed(() =>
+          activeMembers.value.map(m => ({ member: m, stats: computeStats(m) }))
+        );
+        const exitedMemberInfoList = computed(() =>
+          exitedMembers.value.map(m => ({ member: m, stats: computeStats(m) }))
+        );
+
+        const goToMemberDetail = (memberId) => {
+          selectedMemberId.value = memberId;
+          currentPage.value = 'memberDetail';
+        };
+
+        const addWeek = () => {
+          if (!newWeek.value.trim()) return;
+          weeks.value.push({ id: 'w_' + Date.now(), name: newWeek.value.trim() });
+          newWeek.value = '';
+        };
+
+        // 第2點：修改週次名稱
+        const editWeek = (week) => {
+          const newName = prompt('修改週次名稱：', week.name);
+          if (newName !== null && newName.trim()) {
+            week.name = newName.trim();
+          }
+        };
+
+        // 第2點：刪除週次（同時清除所有成員在該週的紀錄）
+        const deleteWeek = (week) => {
+          if (confirm(`確定要刪除「${week.name}」這個週次欄位嗎？\n所有成員在這一週的紀錄也會一併刪除，且無法復原。`)) {
+            weeks.value = weeks.value.filter(w => w.id !== week.id);
+            members.value.forEach(m => {
+              if (m.records[week.id] !== undefined) delete m.records[week.id];
+            });
+          }
+        };
+
+        const addMember = () => {
+          if (!newMember.value.trim()) return;
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          members.value.push({
+            id: 'm_' + Date.now(),
+            name: newMember.value.trim(),
+            status: 'active',
+            intro: false,
+            nationality: '',
+            age: '',
+            joinDate: todayStr,
+            exitDate: '',
+            exitReason: '',
+            records: {}
+          });
+          newMember.value = '';
+        };
+
+        const toggleIntro = (member) => {
+          member.intro = !member.intro;
+        };
+
+        const toggleRecord = (member, weekId) => {
+          const current = member.records[weekId];
+          if (!current || current === '') {
+            member.records[weekId] = '👍';
+          } else if (current === '👍') {
+            member.records[weekId] = '👍👍';
+          } else if (current === '👍👍') {
+            member.records[weekId] = '👍👍👍';
+          } else if (current === '👍👍👍') {
+            member.records[weekId] = '🟨';
+          } else if (current === '🟨') {
+            member.records[weekId] = '🟥';
+            setTimeout(() => { checkRedCard(member); }, 50);
+          } else {
+            member.records[weekId] = '';
+          }
+        };
+
+        const checkRedCard = (member) => {
+          if (confirm(`成員 ${member.name} 標記為紅牌 (🟥)。\n是否要將其移入退出名單？`)) {
+            let reason = prompt("請輸入退出原因 (例如: 未補交三則語音踢出 或 自動退出):", "踢出");
+            if (reason !== null) {
+              member.status = 'exited';
+              member.exitReason = reason;
+
+              const today = new Date();
+              member.exitDate = `${today.getMonth() + 1}/${today.getDate()}`;
+            }
+          }
+        };
+
+        const restoreMember = (member) => {
+          if (confirm(`確定要將 ${member.name} 恢復為活躍成員嗎？`)) {
+            member.status = 'active';
+            member.exitDate = '';
+            member.exitReason = '';
+          }
+        };
+
+        return {
+          weeks, members, newWeek, newMember,
+          activeMembers, exitedMembers,
+          addWeek, addMember, toggleIntro, toggleRecord, restoreMember,
+          editWeek, deleteWeek,
+          currentPage, selectedMemberId, selectedMember, selectedMemberStats,
+          activeMemberInfoList, exitedMemberInfoList,
+          goToMemberDetail
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
