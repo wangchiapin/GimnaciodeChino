@@ -19,18 +19,13 @@
     5. 到 initFirebaseConfig() 裡把 apiKey 等欄位換成你自己的值
     目前這兩行是註解狀態，不會發送任何網路請求，不影響現有 localStorage 版本運作。
   -->
-  <!--
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc };
   </script>
-  -->
-  <script type="module">
-   import { initializeApp } from "firebase/app";
-   import { getAnalytics } from "firebase/analytics";
-    window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc };
-  </script>
+
   
   <style>
     body {
