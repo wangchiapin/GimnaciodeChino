@@ -26,7 +26,12 @@
     window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc };
   </script>
   -->
-
+  <script type="module">
+   import { initializeApp } from "firebase/app";
+   import { getAnalytics } from "firebase/analytics";
+    window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc };
+  </script>
+  
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -360,18 +365,27 @@
     // 之後要啟用時：把下面設成 true，並在 initFirebaseConfig() 填入你的設定，
     // 同時記得把 <head> 裡那段 <script type="module"> 的註解拿掉。
     // ============================================================
-    const FIREBASE_ENABLED = false;
+    const FIREBASE_ENABLED = true;
 
     function initFirebaseConfig() {
       // 到 Firebase 主控台 → 專案設定 → 你的應用程式 → SDK 設定與程式碼，複製貼上這裡
-      return {
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
+      const firebaseConfig = {
+       apiKey: "AIzaSyAOnHmC3JgInnwPeY1L6jMzLnuJQ9EJmR0",
+       authDomain: "gimnacio-de-chino.firebaseapp.com",
+       projectId: "gimnacio-de-chino",
+       storageBucket: "gimnacio-de-chino.firebasestorage.app",
+       messagingSenderId: "414122979474",
+       appId: "1:414122979474:web:f5a622f8482248deecb64b",
+       measurementId: "G-N6YQ9QXLTS"
       };
+ //    return {
+      //  apiKey: "YOUR_API_KEY",
+     //   authDomain: "YOUR_PROJECT.firebaseapp.com",
+     //   projectId: "YOUR_PROJECT_ID",
+     //   storageBucket: "YOUR_PROJECT.appspot.com",
+     //   messagingSenderId: "YOUR_SENDER_ID",
+      //  appId: "YOUR_APP_ID"
+  //    };
     }
 
     let firebaseDb = null;
