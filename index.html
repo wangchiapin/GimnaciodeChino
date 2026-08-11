@@ -298,10 +298,83 @@
     .modal-btn-cancel:hover { background-color: #e2e5ec; }
     .modal-btn-confirm.danger { background-color: var(--danger); }
     .modal-btn-confirm.danger:hover { background-color: #b91c1c; }
+
+    /* ===== 品牌抬頭 ===== */
+    .brand-header {
+      margin-bottom: 18px;
+      padding: 0 2px;
+    }
+    .brand-header h1 {
+      margin: 0;
+      font-size: 1.5em;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .brand-header .brand-en {
+      font-size: 0.6em;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .brand-header .brand-sub {
+      margin-top: 2px;
+      font-size: 0.82em;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ===== 週次練習表頁面 ===== */
+    .week-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+    .week-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+    }
+    .week-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .week-card-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .week-card-title .name { font-weight: 700; font-size: 1.05em; }
+    .week-card-title .date { font-size: 0.85em; color: var(--text-muted); }
+    .week-card-actions { display: flex; gap: 6px; }
+    .week-card-participants {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .participant-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--border);
+      font-size: 0.85em;
+    }
+    .participant-chip.is-exited { opacity: 0.55; }
+    .participant-count { font-size: 0.82em; color: var(--text-muted); margin-top: 8px; }
   </style>
 </head>
 <body>
   <div id="app">
+
+    <div class="brand-header">
+      <h1>中文健身房 <span class="brand-en">Gimnacio de Chino</span></h1>
+      <div class="brand-sub">by @cadadiaunosminutos</div>
+    </div>
 
     <!-- ============ 頁面一：主要試算表 ============ -->
     <div v-if="currentPage === 'main'">
@@ -318,11 +391,12 @@
           <button @click="addMember">加入</button>
         </div>
         <button class="info-btn" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
+        <button class="info-btn" @click="currentPage = 'weekList'">📅 週次練習表</button>
         <span class="text-muted">點擊格子依序切換 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 🟨 ➔ 🟥 ➔ 空白</strong>，點 🟥 會觸發退群確認。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
       </div>
 
       <h3 class="section-title">🟢 活躍成員（{{ activeMembers.length }} 人）</h3>
-      <div class="sheet-container">
+      <div class="sheet-container" ref="activeSheetEl">
         <table>
           <thead>
             <tr>
@@ -495,6 +569,45 @@
       </div>
     </div>
 
+    <!-- ============ 頁面四：週次練習表 ============ -->
+    <div v-if="currentPage === 'weekList'" class="page-container">
+      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <h2>週次練習表</h2>
+      <span class="text-muted">在這裡新增、修改、刪除練習週次，並查看每一週有誰參加。</span>
+
+      <div class="control-panel" style="margin-top: 14px;">
+        <div class="control-group">
+          <strong>新增週次：</strong>
+          <input type="text" v-model="newWeekName" placeholder="例: 語音練習" style="width:120px;" @keyup.enter="addWeek">
+          <input type="date" v-model="newWeekDate">
+          <button @click="addWeek">新增</button>
+        </div>
+      </div>
+
+      <div class="week-cards">
+        <div class="week-card" v-for="week in weeksNewestFirst" :key="week.id">
+          <div class="week-card-head">
+            <div class="week-card-title">
+              <span class="name">{{ week.name }}</span>
+              <span class="date">{{ week.date || '未設定日期' }}</span>
+            </div>
+            <div class="week-card-actions">
+              <button class="small secondary" @click="openWeekEdit(week)">✏️ 修改</button>
+              <button class="small secondary" @click="deleteWeek(week)">🗑 刪除</button>
+            </div>
+          </div>
+          <div class="week-card-participants">
+            <span v-for="p in participantsForWeek(week)" :key="p.id" class="participant-chip" :class="{'is-exited': p.status === 'exited'}">
+              {{ p.name }} {{ p.record }}
+            </span>
+            <span v-if="participantsForWeek(week).length === 0" class="text-muted" style="margin:0;">尚無人參加這一週</span>
+          </div>
+          <div class="participant-count">{{ participantsForWeek(week).length }} 人參加</div>
+        </div>
+        <div v-if="weeks.length === 0" class="text-muted" style="margin-top: 14px;">目前還沒有任何週次，請先新增。</div>
+      </div>
+    </div>
+
     <!-- ============ Modal：通用確認 / 輸入框 ============ -->
     <div v-if="modal.visible" class="modal-overlay" @click.self="modalCancelClick" @keydown.esc="modalCancelClick" tabindex="-1">
       <div class="modal-box">
@@ -654,7 +767,22 @@
         }
         migrateData();
 
+        // 進入主表格頁面時，自動把水平捲軸捲到最右邊（最新的週次），
+        // 週次本身的順序（左到右＝舊到新）完全不變，只是預設顯示的位置不同。
+        const activeSheetEl = ref(null);
+        function scrollToLatestWeek() {
+          nextTick(() => {
+            if (activeSheetEl.value) {
+              activeSheetEl.value.scrollLeft = activeSheetEl.value.scrollWidth;
+            }
+          });
+        }
+        watch(currentPage, (val) => {
+          if (val === 'main') scrollToLatestWeek();
+        });
+
         onMounted(async () => {
+          scrollToLatestWeek();
           if (!FIREBASE_ENABLED) return;
           console.log('正在從 Firebase 載入最新資料...');
           const cloudData = await loadFromFirebase();
@@ -662,6 +790,7 @@
             if (cloudData.weeks) weeks.value = cloudData.weeks;
             if (cloudData.members) members.value = cloudData.members;
             migrateData(); // 雲端資料也要跑一次遷移，避免舊欄位造成 undefined
+            scrollToLatestWeek();
             console.log('資料同步完成！');
           }
         });
@@ -679,6 +808,15 @@
         const newWeekName = ref('');
         const newWeekDate = ref(todayStr());
         const newMember = ref('');
+
+        // 週次練習表頁面：由新到舊顯示（不影響主表格 weeks 本身的順序）
+        const weeksNewestFirst = computed(() => [...weeks.value].reverse());
+
+        function participantsForWeek(week) {
+          return members.value
+            .filter(m => m.records[week.id])
+            .map(m => ({ id: m.id, name: m.name, record: m.records[week.id], status: m.status }));
+        }
 
         // ===== Modal（通用確認 / 輸入框） =====
         const modal = ref({
@@ -881,7 +1019,8 @@
           currentPage, selectedMemberId, selectedMember, selectedMemberStats,
           activeMemberInfoList, exitedMemberInfoList,
           goToMemberDetail, isBeforeJoin, canRejoin, daysUntilRejoin,
-          modal, modalInputEl, modalConfirmClick, modalCancelClick
+          modal, modalInputEl, modalConfirmClick, modalCancelClick,
+          weeksNewestFirst, participantsForWeek, activeSheetEl
         };
       }
     }).mount('#app');
