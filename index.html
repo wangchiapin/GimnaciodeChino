@@ -352,7 +352,7 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, watch } = Vue;
+    const { createApp, ref, computed, watch, onMounted } = Vue;
 
     // ============================================================
     // Firebase 開關（第3點：架構先建好，之後你自己接上）
@@ -437,7 +437,24 @@
         const members = ref(savedMembers ? JSON.parse(savedMembers) : [
           { id: 'm1', name: 'Pablo', status: 'active', intro: true, records: {'w_demo1': '👍'} }
         ]);
-
+   
+    onMounted(async () => {
+        if (FIREBASE_ENABLED) {
+            console.log("正在從 Firebase 載入最新資料...");
+        const cloudData = await loadFromFirebase();
+      
+        if (cloudData) {
+        // 如果雲端有資料，就用雲端的資料覆蓋本機資料
+        if (cloudData.weeks) {
+          weeks.value = cloudData.weeks;
+        }
+        if (cloudData.members) {
+          members.value = cloudData.members;
+        }
+        console.log("資料同步完成！");
+      }
+    }
+  });
         // 資料遷移：舊資料補上新增的欄位，避免 undefined
         members.value.forEach(m => {
           if (m.nationality === undefined) m.nationality = '';
