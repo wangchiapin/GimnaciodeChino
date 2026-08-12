@@ -107,16 +107,23 @@
 
     .text-muted { font-size: 0.85em; color: var(--text-muted); margin-top: 4px; display: block; width: 100%; line-height: 1.6; }
 
-    /* ===== 表格容器：獨立捲動 ===== */
+    /* ===== 表格容器：獨立捲動 =====
+       這裡刻意用固定的 height（不是 max-height）。
+       如果用 max-height，當資料筆數不多、內容還沒超過上限時，這個容器本身
+       不會產生「內部捲軸」，這時候使用者捲動的其實是整個網頁，而不是這個
+       容器內部——sticky 表頭是相對於「自己所在的捲動容器」生效的，容器沒有
+       自己捲動，表頭就會被整頁一起帶走，看起來像是「捲下去表頭就不見了」。
+       固定 height 可以保證不管資料多寡，這個容器永遠會建立自己的捲動範圍，
+       表頭才能穩定保持可見。 */
     .sheet-container {
       width: 100%;
-      max-height: 56vh;
+      height: 56vh;
       overflow: auto;
       background: var(--surface);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
     }
-    .sheet-container.exited-container { max-height: 38vh; }
+    .sheet-container.exited-container { height: 38vh; }
 
     table {
       border-collapse: separate;
@@ -147,17 +154,43 @@
       z-index: 4;
     }
 
-    .sticky-col-1 { position: sticky; left: 0; z-index: 2; width: 40px; min-width: 40px; }
-    .sticky-col-2 { position: sticky; left: 40px; z-index: 2; width: 130px; min-width: 130px; text-align: left; }
-    .sticky-col-3 { position: sticky; left: 170px; z-index: 2; width: 80px; min-width: 80px; }
+    /* ===== 單一表格 + 左側凍結欄 =====
+       資料列（td）三個凍結欄：本身只做「左」凍結，單一維度，瀏覽器支援穩定。 */
+    .frozen-1 { position: sticky; left: 0px;   z-index: 2; width: 40px;  min-width: 40px; }
+    .frozen-2 { position: sticky; left: 40px;  z-index: 2; width: 130px; min-width: 130px; text-align: left; }
+    .frozen-3 { position: sticky; left: 170px; z-index: 2; width: 80px;  min-width: 80px; }
+    .active-row .frozen-1 { color: var(--text-muted); font-size: 0.85em; }
+    .active-row .frozen-2 { font-weight: 600; }
 
-    th.sticky-col-1, th.sticky-col-2, th.sticky-col-3 {
+    /* 表頭三個凍結欄（th）：這三格需要「同時」凍結上方＋左側。
+       如果直接在同一個 th 上同時設定 top + left 兩個方向的 sticky，
+       部分瀏覽器（尤其 Chrome）對表格儲存格的雙軸 sticky 支援不穩定，會造成渲染錯亂。
+       解法：外層 th 只負責「上」凍結，內層再包一層 div 只負責「左」凍結，
+       兩個各自單一維度、各自穩定，疊加起來就等於角落被同時固定住。 */
+    .frozen-head-1, .frozen-head-2, .frozen-head-3 {
+      position: sticky;
+      top: 0;
       z-index: 5;
+      padding: 0;
       background-color: var(--primary-soft);
     }
-
-    .active-row .sticky-col-1 { color: var(--text-muted); font-size: 0.85em; }
-    .active-row .sticky-col-2 { font-weight: 600; }
+    .frozen-head-1 { width: 40px; min-width: 40px; }
+    .frozen-head-2 { width: 130px; min-width: 130px; }
+    .frozen-head-3 { width: 80px; min-width: 80px; }
+    .corner-pin {
+      position: sticky;
+      z-index: 5;
+      background-color: var(--primary-soft);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      box-sizing: border-box;
+    }
+    .corner-pin.pin-1 { left: 0px; }
+    .corner-pin.pin-2 { left: 40px; justify-content: flex-start; }
+    .corner-pin.pin-3 { left: 170px; }
 
     .cell-clickable { cursor: pointer; }
     .cell-clickable:hover { background-color: #f5f6fb; }
@@ -401,9 +434,9 @@
         <table>
           <thead>
             <tr>
-              <th class="sticky-col-1">#</th>
-              <th class="sticky-col-2">姓名</th>
-              <th class="sticky-col-3">自我介紹</th>
+              <th class="frozen-head-1"><div class="corner-pin pin-1">#</div></th>
+              <th class="frozen-head-2"><div class="corner-pin pin-2">姓名</div></th>
+              <th class="frozen-head-3"><div class="corner-pin pin-3">自我介紹</div></th>
               <th v-for="week in weeks" :key="week.id" class="week-header-cell">
                 <span class="week-name">{{ week.name }}</span>
                 <span class="week-date" v-if="week.date">{{ week.date }}</span>
@@ -416,9 +449,9 @@
           </thead>
           <tbody>
             <tr v-for="(member, index) in activeMembers" :key="member.id" class="active-row">
-              <td class="sticky-col-1">{{ index + 1 }}</td>
-              <td class="sticky-col-2 member-link" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
-              <td class="sticky-col-3 cell-clickable" @click="toggleIntro(member)">
+              <td class="frozen-1">{{ index + 1 }}</td>
+              <td class="frozen-2 member-link" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
+              <td class="frozen-3 cell-clickable" @click="toggleIntro(member)">
                 {{ member.intro ? '👍' : '' }}
               </td>
               <td v-for="week in weeks" :key="week.id"
