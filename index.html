@@ -192,21 +192,15 @@
     .corner-pin.pin-2 { left: 40px; justify-content: flex-start; }
     .corner-pin.pin-3 { left: 170px; }
 
-    /* ===== 手機版緊湊模式：#欄整個移除，姓名/自我介紹欄大幅收窄，
-       把空間讓給週次欄位，至少能看到最近兩週的紀錄 ===== */
-    .mobile-compact .frozen-2 { left: 0px; width: 72px; min-width: 72px; }
-    .mobile-compact .frozen-3 { left: 72px; width: 44px; min-width: 44px; }
-    .mobile-compact .frozen-head-2 { width: 72px; min-width: 72px; }
-    .mobile-compact .frozen-head-3 { width: 44px; min-width: 44px; }
+    /* ===== 手機版緊湊模式：#欄整個移除，自我介紹欄縮到只放一個 emoji 的寬度，
+       姓名欄維持足夠寬度完整顯示（不截斷），單純凍結。
+       把省下的空間讓給週次欄位，至少能看到最近兩週的紀錄 ===== */
+    .mobile-compact .frozen-2 { left: 0px; width: 104px; min-width: 104px; }
+    .mobile-compact .frozen-3 { left: 104px; width: 40px; min-width: 40px; }
+    .mobile-compact .frozen-head-2 { width: 104px; min-width: 104px; }
+    .mobile-compact .frozen-head-3 { width: 40px; min-width: 40px; }
     .mobile-compact .corner-pin.pin-2 { left: 0px; }
-    .mobile-compact .corner-pin.pin-3 { left: 72px; padding: 8px 4px; }
-    .mobile-compact .frozen-2.member-link {
-      display: block;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      max-width: 100%;
-    }
+    .mobile-compact .corner-pin.pin-3 { left: 104px; padding: 8px 2px; }
 
     .cell-clickable { cursor: pointer; }
     .cell-clickable:hover { background-color: #f5f6fb; }
@@ -452,7 +446,7 @@
             <tr>
               <th v-if="!isMobile" class="frozen-head-1"><div class="corner-pin pin-1">#</div></th>
               <th class="frozen-head-2"><div class="corner-pin pin-2">姓名</div></th>
-              <th class="frozen-head-3"><div class="corner-pin pin-3">{{ isMobile ? '介紹' : '自我介紹' }}</div></th>
+              <th class="frozen-head-3"><div class="corner-pin pin-3">{{ isMobile ? '🙋' : '自我介紹' }}</div></th>
               <th v-for="week in weeks" :key="week.id" class="week-header-cell">
                 <span class="week-name">{{ week.name }}</span>
                 <span class="week-date" v-if="week.date">{{ week.date }}</span>
