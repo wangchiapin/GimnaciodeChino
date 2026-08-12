@@ -777,23 +777,6 @@
             }
           });
         }
-        watch(currentPage, (val) => {
-          if (val === 'main') scrollToLatestWeek();
-        });
-
-        onMounted(async () => {
-          scrollToLatestWeek();
-          if (!FIREBASE_ENABLED) return;
-          console.log('正在從 Firebase 載入最新資料...');
-          const cloudData = await loadFromFirebase();
-          if (cloudData) {
-            if (cloudData.weeks) weeks.value = cloudData.weeks;
-            if (cloudData.members) members.value = cloudData.members;
-            migrateData(); // 雲端資料也要跑一次遷移，避免舊欄位造成 undefined
-            scrollToLatestWeek();
-            console.log('資料同步完成！');
-          }
-        });
 
         watch(weeks, (newVal) => {
           localStorage.setItem('sheetWeeks', JSON.stringify(newVal));
@@ -874,8 +857,26 @@
         const cancelWeekEdit = () => { weekEditModal.value.visible = false; };
 
         // ===== 頁面切換 =====
-        const currentPage = ref('main'); // 'main' | 'memberDetail' | 'memberInfo'
+        const currentPage = ref('main'); // 'main' | 'memberDetail' | 'memberInfo' | 'weekList'
         const selectedMemberId = ref(null);
+
+        watch(currentPage, (val) => {
+          if (val === 'main') scrollToLatestWeek();
+        });
+
+        onMounted(async () => {
+          scrollToLatestWeek();
+          if (!FIREBASE_ENABLED) return;
+          console.log('正在從 Firebase 載入最新資料...');
+          const cloudData = await loadFromFirebase();
+          if (cloudData) {
+            if (cloudData.weeks) weeks.value = cloudData.weeks;
+            if (cloudData.members) members.value = cloudData.members;
+            migrateData(); // 雲端資料也要跑一次遷移，避免舊欄位造成 undefined
+            scrollToLatestWeek();
+            console.log('資料同步完成！');
+          }
+        });
 
         const activeMembers = computed(() => members.value.filter(m => m.status === 'active'));
         const exitedMembers = computed(() => members.value.filter(m => m.status === 'exited'));
