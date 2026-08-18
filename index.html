@@ -204,7 +204,31 @@
 
     .cell-clickable { cursor: pointer; }
     .cell-clickable:hover { background-color: #f5f6fb; }
-    .bg-yellow-cell { background-color: #fff7cd !important; }
+
+    /* ===== 週次紀錄格：讚數與黃/紅牌分成上下兩層，各自獨立點擊 =====
+       上層（cell-count）：點擊主格本身，依序切換讚數 0→👍→👍👍→👍👍👍→0，
+       跟下層的黃/紅牌完全無關，不會互相覆蓋。
+       下層（cell-flag）：獨立的小方塊，點擊切換 無→🟨→🟥→無，
+       不管上層讚數紀錄到哪裡都不會被清掉——這樣「發了兩則但沒達標被踢」
+       的歷史紀錄才能同時保留。 */
+    .week-cell { height: 52px; padding: 4px 6px; vertical-align: middle; }
+    .cell-count { font-size: 0.95em; line-height: 1.25; min-height: 18px; }
+    .cell-flag {
+      margin: 4px auto 0;
+      height: 20px;
+      line-height: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      border-radius: 4px;
+      max-width: 60px;
+    }
+    .cell-flag.flag-none {
+      border-top: 2px dotted var(--border);
+      opacity: 0.35;
+    }
+    .cell-flag.flag-none:hover { opacity: 0.85; background: #f5f6fb; }
+    .cell-flag.flag-yellow { background: #fff7cd; }
+    .cell-flag.flag-red { background: #fee2e2; }
 
     /* 最新一週整欄標示：淺藍底＋加粗左右邊框，垂直捲動時方便一眼認出是哪一欄 */
     .latest-week-col { background-color: #dbeafe; box-shadow: inset -2px -1px 0 0 var(--primary), inset 2px 0 0 0 var(--primary); }
@@ -463,7 +487,7 @@
         </div>
         <button class="info-btn" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
         <button class="info-btn" @click="currentPage = 'weekList'">📅 週次練習表</button>
-        <span class="text-muted">點擊格子依序切換 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 🟨 ➔ 🟥 ➔ 空白</strong>，點 🟥 會觸發退群確認。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
+        <span class="text-muted">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
       </div>
 
       <h3 class="section-title">🟢 活躍成員（{{ activeMembers.length }} 人）</h3>
@@ -492,10 +516,14 @@
                 {{ member.intro ? '👍' : '' }}
               </td>
               <td v-for="week in weeks" :key="week.id"
-                  class="cell-clickable"
-                  :class="{'bg-yellow-cell': member.records[week.id] === '🟨', 'latest-week-col': week.id === latestWeekId}"
-                  @click="toggleRecord(member, week.id)">
-                {{ member.records[week.id] || '' }}
+                  class="cell-clickable week-cell"
+                  :class="{'latest-week-col': week.id === latestWeekId}"
+                  @click="incrementCount(member, week.id)">
+                <div class="cell-count">{{ thumbsFor(getRecord(member, week.id).count) }}</div>
+                <div class="cell-flag"
+                     :class="'flag-' + (getRecord(member, week.id).flag || 'none')"
+                     @click.stop="cycleFlag(member, week.id)"
+                     title="點擊獨立標記黃牌/紅牌，不影響讚數">{{ flagEmoji(getRecord(member, week.id).flag) }}</div>
               </td>
             </tr>
             <tr v-if="activeMembers.length === 0">
@@ -572,7 +600,7 @@
           <tr v-for="week in weeks" :key="week.id" :class="{'week-row-excluded': isBeforeJoin(week, selectedMember)}">
             <td>{{ week.name }}</td>
             <td>{{ week.date || '—' }}</td>
-            <td>{{ isBeforeJoin(week, selectedMember) ? '（尚未加入群組）' : (selectedMember.records[week.id] || '（無紀錄）') }}</td>
+            <td>{{ isBeforeJoin(week, selectedMember) ? '（尚未加入群組）' : recordSummary(selectedMember, week.id) }}</td>
           </tr>
         </tbody>
       </table>
@@ -701,7 +729,7 @@
       </div>
     </div>
 
-    <!-- ============ Modal：週次編輯（名稱＋日期） ============ -->
+    <!-- ============ Modal：週次編輯（名稱＋日期＋備註） ============ -->
     <div v-if="weekEditModal.visible" class="modal-overlay" @click.self="cancelWeekEdit" @keydown.esc="cancelWeekEdit" tabindex="-1">
       <div class="modal-box">
         <div class="modal-title">✏️ 修改週次</div>
@@ -813,20 +841,31 @@
       return iso;
     }
 
+    // 把舊版「單一字串」紀錄格式轉成新的 { count, flag } 物件格式
+    function migrateRecordValue(val) {
+      if (val === '👍') return { count: 1, flag: null };
+      if (val === '👍👍') return { count: 2, flag: null };
+      if (val === '👍👍👍') return { count: 3, flag: null };
+      if (val === '🟨') return { count: 0, flag: 'yellow' };
+      if (val === '🟥') return { count: 0, flag: 'red' };
+      return null; // 空字串或無法辨識的舊值 -> 視為沒有紀錄
+    }
+
     createApp({
       setup() {
         const savedWeeks = localStorage.getItem('sheetWeeks');
         const savedMembers = localStorage.getItem('sheetMembers');
 
         const weeks = ref(savedWeeks ? JSON.parse(savedWeeks) : [
-          { id: 'w_demo1', name: '7/20 很熱', date: guessDateFromWeekName('7/20 很熱') }
+          { id: 'w_demo1', name: '7/20 很熱', date: guessDateFromWeekName('7/20 很熱'), note: '' }
         ]);
 
         const members = ref(savedMembers ? JSON.parse(savedMembers) : [
-          { id: 'm1', name: 'Pablo', status: 'active', intro: true, records: {'w_demo1': '👍'} }
+          { id: 'm1', name: 'Pablo', status: 'active', intro: true, records: { 'w_demo1': { count: 1, flag: null } } }
         ]);
 
-        // 資料遷移：補齊欄位，避免 undefined。可重複呼叫（本機載入時、雲端資料回來後都會跑一次）
+        // 資料遷移：補齊欄位、把舊版字串紀錄轉成新的 {count,flag} 物件格式。
+        // 可重複呼叫（本機載入時、雲端資料回來後都會跑一次）
         function migrateData() {
           weeks.value.forEach(w => {
             if (w.date === undefined || w.date === null) w.date = guessDateFromWeekName(w.name);
@@ -840,6 +879,17 @@
             else if (/^\d{1,2}\/\d{1,2}$/.test(m.exitDate)) m.exitDate = guessIsoFromShortDate(m.exitDate);
             if (m.exitReason === undefined) m.exitReason = '';
             if (m.records === undefined) m.records = {};
+            Object.keys(m.records).forEach(wid => {
+              const val = m.records[wid];
+              if (typeof val === 'string') {
+                const converted = migrateRecordValue(val);
+                if (converted) m.records[wid] = converted;
+                else delete m.records[wid];
+              } else if (val && typeof val === 'object') {
+                if (val.count === undefined || val.count === null) val.count = 0;
+                if (val.flag === undefined) val.flag = null;
+              }
+            });
           });
         }
         migrateData();
@@ -880,10 +930,56 @@
         // 週次陣列本身是「舊到新」排序，最後一筆就是最新一週
         const latestWeekId = computed(() => weeks.value.length ? weeks.value[weeks.value.length - 1].id : null);
 
+        // ===== 讚數／黃紅牌 記錄相關輔助函式 =====
+        // 取得某成員在某週的紀錄物件，不存在時回傳預設值（不會寫入資料，純讀取用）
+        function getRecord(member, weekId) {
+          return member.records[weekId] || { count: 0, flag: null };
+        }
+        function thumbsFor(count) {
+          return '👍'.repeat(count || 0);
+        }
+        function flagEmoji(flag) {
+          if (flag === 'yellow') return '🟨';
+          if (flag === 'red') return '🟥';
+          return '';
+        }
+        // 合併顯示用（個人統計頁面的每週明細）
+        function recordSummary(member, weekId) {
+          const r = getRecord(member, weekId);
+          const parts = [];
+          if (r.count > 0) parts.push(thumbsFor(r.count));
+          if (r.flag) parts.push(flagEmoji(r.flag));
+          return parts.length ? parts.join(' ') : '（無紀錄）';
+        }
+
+        // 點擊格子主體：只切換讚數，0→1→2→3→0，完全不動黃/紅牌
+        function incrementCount(member, weekId) {
+          if (!member.records[weekId]) member.records[weekId] = { count: 0, flag: null };
+          const rec = member.records[weekId];
+          rec.count = rec.count >= 3 ? 0 : rec.count + 1;
+        }
+        // 點擊格子下方小方塊：獨立切換黃/紅牌，完全不動讚數，
+        // 這樣「發了兩則但沒達標被踢」的歷史紀錄才能同時保留下來
+        function cycleFlag(member, weekId) {
+          if (!member.records[weekId]) member.records[weekId] = { count: 0, flag: null };
+          const rec = member.records[weekId];
+          if (!rec.flag) {
+            rec.flag = 'yellow';
+          } else if (rec.flag === 'yellow') {
+            rec.flag = 'red';
+            setTimeout(() => { checkRedCard(member); }, 50);
+          } else {
+            rec.flag = null;
+          }
+        }
+
         function participantsForWeek(week) {
           return members.value
-            .filter(m => m.records[week.id])
-            .map(m => ({ id: m.id, name: m.name, record: m.records[week.id], status: m.status }));
+            .filter(m => { const r = m.records[week.id]; return r && (r.count > 0 || r.flag); })
+            .map(m => {
+              const r = m.records[week.id];
+              return { id: m.id, name: m.name, record: (thumbsFor(r.count) + ' ' + flagEmoji(r.flag)).trim(), status: m.status };
+            });
         }
 
         // ===== Modal（通用確認 / 輸入框） =====
@@ -924,7 +1020,7 @@
           if (resolve) resolve(result);
         };
 
-        // ===== Modal（週次編輯：名稱＋日期） =====
+        // ===== Modal（週次編輯：名稱＋日期＋備註） =====
         const weekEditModal = ref({ visible: false, week: null, name: '', date: '', note: '' });
         const weekEditNameEl = ref(null);
         const openWeekEdit = (week) => {
@@ -985,11 +1081,11 @@
           let total = 0, yellow = 0, red = 0, attended = 0;
           eligible.forEach(w => {
             const r = member.records[w.id];
-            if (r === '👍') { total += 1; attended++; }
-            else if (r === '👍👍') { total += 2; attended++; }
-            else if (r === '👍👍👍') { total += 3; attended++; }
-            else if (r === '🟨') { yellow++; attended++; }
-            else if (r === '🟥') { red++; attended++; }
+            if (!r || (r.count === 0 && !r.flag)) return; // 這週完全沒有任何紀錄
+            total += r.count;
+            if (r.flag === 'yellow') yellow++;
+            else if (r.flag === 'red') red++;
+            attended++;
           });
           const rate = eligible.length ? Math.round((attended / eligible.length) * 100) : 0;
           return { total, yellow, red, attended, rate, eligibleCount: eligible.length };
@@ -1054,18 +1150,6 @@
 
         const toggleIntro = (member) => { member.intro = !member.intro; };
 
-        const toggleRecord = (member, weekId) => {
-          const current = member.records[weekId];
-          if (!current || current === '') member.records[weekId] = '👍';
-          else if (current === '👍') member.records[weekId] = '👍👍';
-          else if (current === '👍👍') member.records[weekId] = '👍👍👍';
-          else if (current === '👍👍👍') member.records[weekId] = '🟨';
-          else if (current === '🟨') {
-            member.records[weekId] = '🟥';
-            setTimeout(() => { checkRedCard(member); }, 50);
-          } else member.records[weekId] = '';
-        };
-
         const checkRedCard = async (member) => {
           const ok = await showConfirm({
             title: '標記紅牌', danger: true, confirmText: '移入退出名單',
@@ -1102,14 +1186,15 @@
         return {
           weeks, members, newWeekName, newWeekDate, newMember,
           activeMembers, exitedMembers,
-          addWeek, addMember, toggleIntro, toggleRecord, restoreMember,
+          addWeek, addMember, toggleIntro, restoreMember,
           deleteWeek, openWeekEdit, confirmWeekEdit, cancelWeekEdit,
           weekEditModal, weekEditNameEl,
           currentPage, selectedMemberId, selectedMember, selectedMemberStats,
           activeMemberInfoList, exitedMemberInfoList,
           goToMemberDetail, isBeforeJoin, canRejoin, daysUntilRejoin,
           modal, modalInputEl, modalConfirmClick, modalCancelClick,
-          weeksNewestFirst, participantsForWeek, activeSheetEl, isMobile, latestWeekId
+          weeksNewestFirst, participantsForWeek, activeSheetEl, isMobile, latestWeekId,
+          getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag
         };
       }
     }).mount('#app');
