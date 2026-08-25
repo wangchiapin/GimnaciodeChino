@@ -879,16 +879,15 @@
             if (m.exitDate === undefined) m.exitDate = '';
             else if (/^\d{1,2}\/\d{1,2}$/.test(m.exitDate)) m.exitDate = guessIsoFromShortDate(m.exitDate);
             if (m.exitReason === undefined) m.exitReason = '';
-            // 累積黃牌的起算點：預設等於入群時間，重新加入群組時會被重設為當天，讓累積重新計算
-            if (m.yellowCycleStart === undefined) m.yellowCycleStart = m.joinDate || '';
             if (m.records === undefined) m.records = {};
             Object.keys(m.records).forEach(wid => {
-              const val = m.records[wid];
+              let val = m.records[wid];
               if (typeof val === 'string') {
                 const converted = migrateRecordValue(val);
-                if (converted) m.records[wid] = converted;
-                else delete m.records[wid];
-              } else if (val && typeof val === 'object') {
+                if (converted) { m.records[wid] = converted; val = converted; }
+                else { delete m.records[wid]; val = null; }
+              }
+              if (val && typeof val === 'object') {
                 if (val.count === undefined || val.count === null) val.count = 0;
                 if (val.flag === undefined) val.flag = null;
                 // everYellow：這一週是否「曾經」被標記過黃牌，即使後來被拿掉也不會清除，
@@ -964,12 +963,11 @@
           const rec = member.records[weekId];
           rec.count = rec.count >= 3 ? 0 : rec.count + 1;
         }
-        // 累積黃牌張數（含已被拿掉的）：只計算「重新加入群組後」（yellowCycleStart 之後）的週次，
-        // 用 everYellow 而非目前的 flag，因為黃牌拿掉後 flag 會變回 null，但歷史紀錄要繼續算
+        // 累積黃牌張數（含已被拿掉的）：只計算「入群後」（跟出席率用同一個入群時間）的週次，
+        // 用 everYellow 而非目前的 flag，因為黃牌拿掉後 flag 會變回 null，但歷史紀錄要繼續算。
+        // 重新加入群組時（restoreMember）會把入群時間重設為當天，所以這裡自然就會重新累積。
         function cumulativeYellowCount(member) {
-          const start = member.yellowCycleStart || member.joinDate || '';
-          const countedWeeks = start ? weeks.value.filter(w => !w.date || w.date >= start) : weeks.value;
-          return countedWeeks.reduce((sum, w) => {
+          return getEligibleWeeks(member).reduce((sum, w) => {
             const r = member.records[w.id];
             return sum + (r && r.everYellow ? 1 : 0);
           }, 0);
@@ -1167,7 +1165,7 @@
           if (!newMember.value.trim()) return;
           members.value.push({
             id: 'm_' + Date.now(), name: newMember.value.trim(), status: 'active', intro: false,
-            nationality: '', age: '', joinDate: todayStr(), yellowCycleStart: todayStr(), exitDate: '', exitReason: '', records: {}
+            nationality: '', age: '', joinDate: todayStr(), exitDate: '', exitReason: '', records: {}
           });
           newMember.value = '';
         };
@@ -1206,8 +1204,9 @@
             member.status = 'active';
             member.exitDate = '';
             member.exitReason = '';
-            // 重新加入群組後，黃牌累積重新計算（之前的歷史紀錄仍保留在每週格子裡，只是不再計入累積張數）
-            member.yellowCycleStart = todayStr();
+            // 重新加入群組後，入群時間重設為今天：出席率統計跟累積黃牌都會以這天重新起算，
+            // 之前的每週紀錄仍然看得到，只是不會再計入這一輪的累積張數
+            member.joinDate = todayStr();
           }
         };
 
