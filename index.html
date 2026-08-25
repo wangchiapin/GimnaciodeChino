@@ -487,7 +487,7 @@
         </div>
         <button class="info-btn" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
         <button class="info-btn" @click="currentPage = 'weekList'">📅 週次練習表</button>
-        <span class="text-muted">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
+        <span class="text-muted">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。黃牌就算之後被拿掉，紀錄仍會保留並持續累積，<strong>累積達 5 張黃牌會自動視同紅牌並觸發退群確認</strong>；退群後重新加入群組則會重新累積。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
       </div>
 
       <h3 class="section-title">🟢 活躍成員（{{ activeMembers.length }} 人）</h3>
@@ -586,7 +586,8 @@
         <div class="stat-card"><div class="num">{{ selectedMemberStats.total }}</div><div class="label">累計語音則數</div></div>
         <div class="stat-card"><div class="num">{{ selectedMemberStats.attended }} / {{ selectedMemberStats.eligibleCount }}</div><div class="label">參與週數（入群後）</div></div>
         <div class="stat-card"><div class="num">{{ selectedMemberStats.rate }}%</div><div class="label">出席率</div></div>
-        <div class="stat-card"><div class="num">{{ selectedMemberStats.yellow }}</div><div class="label">🟨 黃牌次數</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.yellow }}</div><div class="label">🟨 目前黃牌次數</div></div>
+        <div class="stat-card"><div class="num">{{ selectedMemberStats.cumulativeYellow }} / 5</div><div class="label">🟨 累積黃牌（含已拿掉，達 5 張視同紅牌）</div></div>
         <div class="stat-card"><div class="num">{{ selectedMemberStats.red }}</div><div class="label">🟥 紅牌次數</div></div>
         <div class="stat-card"><div class="num">{{ selectedMember.intro ? '已完成' : '未完成' }}</div><div class="label">自我介紹</div></div>
       </div>
@@ -878,6 +879,8 @@
             if (m.exitDate === undefined) m.exitDate = '';
             else if (/^\d{1,2}\/\d{1,2}$/.test(m.exitDate)) m.exitDate = guessIsoFromShortDate(m.exitDate);
             if (m.exitReason === undefined) m.exitReason = '';
+            // 累積黃牌的起算點：預設等於入群時間，重新加入群組時會被重設為當天，讓累積重新計算
+            if (m.yellowCycleStart === undefined) m.yellowCycleStart = m.joinDate || '';
             if (m.records === undefined) m.records = {};
             Object.keys(m.records).forEach(wid => {
               const val = m.records[wid];
@@ -888,6 +891,9 @@
               } else if (val && typeof val === 'object') {
                 if (val.count === undefined || val.count === null) val.count = 0;
                 if (val.flag === undefined) val.flag = null;
+                // everYellow：這一週是否「曾經」被標記過黃牌，即使後來被拿掉也不會清除，
+                // 用來計算「雖然黃牌拿掉了但紀錄仍在」的累積張數。舊資料以目前是黃牌的狀態回填。
+                if (val.everYellow === undefined) val.everYellow = (val.flag === 'yellow');
               }
             });
           });
@@ -958,6 +964,17 @@
           const rec = member.records[weekId];
           rec.count = rec.count >= 3 ? 0 : rec.count + 1;
         }
+        // 累積黃牌張數（含已被拿掉的）：只計算「重新加入群組後」（yellowCycleStart 之後）的週次，
+        // 用 everYellow 而非目前的 flag，因為黃牌拿掉後 flag 會變回 null，但歷史紀錄要繼續算
+        function cumulativeYellowCount(member) {
+          const start = member.yellowCycleStart || member.joinDate || '';
+          const countedWeeks = start ? weeks.value.filter(w => !w.date || w.date >= start) : weeks.value;
+          return countedWeeks.reduce((sum, w) => {
+            const r = member.records[w.id];
+            return sum + (r && r.everYellow ? 1 : 0);
+          }, 0);
+        }
+
         // 點擊格子下方小方塊：獨立切換黃/紅牌，完全不動讚數，
         // 這樣「發了兩則但沒達標被踢」的歷史紀錄才能同時保留下來
         function cycleFlag(member, weekId) {
@@ -965,6 +982,13 @@
           const rec = member.records[weekId];
           if (!rec.flag) {
             rec.flag = 'yellow';
+            rec.everYellow = true;
+            // 就算之前的黃牌陸續被拿掉，這張仍然會被算進歷史累積裡；
+            // 累積達 5 張時，直接視同紅牌並觸發退群流程
+            if (cumulativeYellowCount(member) >= 5) {
+              rec.flag = 'red';
+              setTimeout(() => { checkRedCard(member, true); }, 50);
+            }
           } else if (rec.flag === 'yellow') {
             rec.flag = 'red';
             setTimeout(() => { checkRedCard(member); }, 50);
@@ -1088,11 +1112,11 @@
             attended++;
           });
           const rate = eligible.length ? Math.round((attended / eligible.length) * 100) : 0;
-          return { total, yellow, red, attended, rate, eligibleCount: eligible.length };
+          return { total, yellow, red, attended, rate, eligibleCount: eligible.length, cumulativeYellow: cumulativeYellowCount(member) };
         }
 
         const selectedMemberStats = computed(() =>
-          selectedMember.value ? computeStats(selectedMember.value) : { total: 0, yellow: 0, red: 0, attended: 0, rate: 0, eligibleCount: 0 }
+          selectedMember.value ? computeStats(selectedMember.value) : { total: 0, yellow: 0, red: 0, attended: 0, rate: 0, eligibleCount: 0, cumulativeYellow: 0 }
         );
         const activeMemberInfoList = computed(() => activeMembers.value.map(m => ({ member: m, stats: computeStats(m) })));
         const exitedMemberInfoList = computed(() => exitedMembers.value.map(m => ({ member: m, stats: computeStats(m) })));
@@ -1143,22 +1167,24 @@
           if (!newMember.value.trim()) return;
           members.value.push({
             id: 'm_' + Date.now(), name: newMember.value.trim(), status: 'active', intro: false,
-            nationality: '', age: '', joinDate: todayStr(), exitDate: '', exitReason: '', records: {}
+            nationality: '', age: '', joinDate: todayStr(), yellowCycleStart: todayStr(), exitDate: '', exitReason: '', records: {}
           });
           newMember.value = '';
         };
 
         const toggleIntro = (member) => { member.intro = !member.intro; };
 
-        const checkRedCard = async (member) => {
+        const checkRedCard = async (member, byCumulativeYellow = false) => {
           const ok = await showConfirm({
             title: '標記紅牌', danger: true, confirmText: '移入退出名單',
-            message: `成員 ${member.name} 標記為紅牌 (🟥)。\n是否要將其移入退出名單？`
+            message: byCumulativeYellow
+              ? `成員 ${member.name} 累積黃牌已達 5 張（含已拿掉的），依群組規定視同紅牌 (🟥)。\n是否要將其移入退出名單？`
+              : `成員 ${member.name} 標記為紅牌 (🟥)。\n是否要將其移入退出名單？`
           });
           if (ok) {
             const reason = await showPrompt({
               title: '退出原因', message: '請輸入退出原因（例如：未補交三則語音踢出 或 自動退出）：',
-              defaultValue: '踢出', placeholder: '請輸入退出原因'
+              defaultValue: byCumulativeYellow ? '累積黃牌達 5 張踢出' : '踢出', placeholder: '請輸入退出原因'
             });
             if (reason !== null) {
               member.status = 'exited';
@@ -1180,6 +1206,8 @@
             member.status = 'active';
             member.exitDate = '';
             member.exitReason = '';
+            // 重新加入群組後，黃牌累積重新計算（之前的歷史紀錄仍保留在每週格子裡，只是不再計入累積張數）
+            member.yellowCycleStart = todayStr();
           }
         };
 
