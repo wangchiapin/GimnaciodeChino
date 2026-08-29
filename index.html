@@ -101,6 +101,8 @@
     button:active { transform: scale(0.98); }
     button.secondary { background: #eef0f4; color: var(--text); }
     button.secondary:hover { background: #e2e5ec; }
+    button.danger { background: var(--danger-soft); color: var(--danger); }
+    button.danger:hover { background: #fecaca; }
     button.info-btn { background: var(--accent); }
     button.info-btn:hover { background: #0e7490; }
     button.small { padding: 4px 10px; font-size: 0.82em; }
@@ -553,7 +555,10 @@
                 <span v-else-if="canRejoin(member) === false" class="badge badge-warning">⏳ 還需等 {{ daysUntilRejoin(member) }} 天</span>
                 <span v-else class="badge badge-muted">未記錄</span>
               </td>
-              <td><button class="small secondary" @click="restoreMember(member)">恢復</button></td>
+              <td>
+                <button class="small secondary" @click="restoreMember(member)">恢復</button>
+                <button class="small danger" style="margin-left:6px" @click="deleteMember(member)">🗑 刪除</button>
+              </td>
             </tr>
             <tr v-if="exitedMembers.length === 0">
               <td colspan="7" style="color: var(--text-muted); padding: 20px;">目前沒有退出成員</td>
@@ -644,7 +649,7 @@
             <tr>
               <th>姓名</th><th>國籍</th><th>年齡</th><th>入群時間</th>
               <th>退群時間</th><th>退群原因</th><th>重新加入資格</th>
-              <th>累計語音則數</th><th>🟨</th><th>🟥</th>
+              <th>累計語音則數</th><th>🟨</th><th>🟥</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -663,6 +668,7 @@
               <td>{{ m.stats.total }}</td>
               <td>{{ m.stats.yellow }}</td>
               <td>{{ m.stats.red }}</td>
+              <td><button class="small danger" @click="deleteMember(m.member)">🗑 刪除</button></td>
             </tr>
           </tbody>
         </table>
@@ -1210,10 +1216,20 @@
           }
         };
 
+        const deleteMember = async (member) => {
+          const ok = await showConfirm({
+            title: '刪除成員', danger: true, confirmText: '永久刪除',
+            message: `確定要永久刪除「${member.name}」嗎？\n這位成員的所有紀錄（讚數、黃紅牌、統計）都會一併刪除，且無法復原。`
+          });
+          if (ok) {
+            members.value = members.value.filter(m => m.id !== member.id);
+          }
+        };
+
         return {
           weeks, members, newWeekName, newWeekDate, newMember,
           activeMembers, exitedMembers,
-          addWeek, addMember, toggleIntro, restoreMember,
+          addWeek, addMember, toggleIntro, restoreMember, deleteMember,
           deleteWeek, openWeekEdit, confirmWeekEdit, cancelWeekEdit,
           weekEditModal, weekEditNameEl,
           currentPage, selectedMemberId, selectedMember, selectedMemberStats,
