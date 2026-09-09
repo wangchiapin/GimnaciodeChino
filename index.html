@@ -467,6 +467,66 @@
     }
     .participant-chip.is-exited { opacity: 0.55; }
     .participant-count { font-size: 0.82em; color: var(--text-muted); margin-top: 8px; }
+
+    /* ===== 主頁：群組分頁 ===== */
+    .group-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 4px 0 16px;
+    }
+    .group-tab {
+      padding: 7px 16px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.88em;
+      cursor: pointer;
+    }
+    .group-tab:hover { background: var(--primary-soft); color: var(--text); }
+    .group-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* ===== 群組管理頁面 ===== */
+    .group-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+    .group-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+    }
+    .group-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .group-card-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .group-card-title .name { font-weight: 700; font-size: 1.05em; }
+    .group-card-title .count { font-size: 0.85em; color: var(--text-muted); }
+    .group-card-actions { display: flex; gap: 6px; }
+    .group-member-picker {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .group-member-picker label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9em;
+      cursor: pointer;
+      user-select: none;
+    }
+    .group-member-picker .exited-tag { color: var(--text-muted); font-size: 0.82em; }
+    .group-member-picker .empty-note { color: var(--text-muted); font-size: 0.85em; }
   </style>
 </head>
 <body>
@@ -493,10 +553,16 @@
         </div>
         <button class="info-btn" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
         <button class="info-btn" @click="currentPage = 'weekList'">📅 週次練習表</button>
+        <button class="info-btn" @click="currentPage = 'groupManage'">👥 群組管理</button>
         <span class="text-muted">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。黃牌就算之後被拿掉，紀錄仍會保留並持續累積，<strong>累積達 5 張黃牌會自動視同紅牌並觸發退群確認</strong>；退群後重新加入群組則會重新累積。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
       </div>
 
-      <h3 class="section-title">🟢 活躍成員（{{ activeMembers.length }} 人）</h3>
+      <div class="group-tabs">
+        <button class="group-tab" :class="{ active: currentGroupFilter === '' }" @click="currentGroupFilter = ''">全體</button>
+        <button v-for="g in groups" :key="g.id" class="group-tab" :class="{ active: currentGroupFilter === g.id }" @click="currentGroupFilter = g.id">{{ g.name }}</button>
+      </div>
+
+      <h3 class="section-title">🟢 活躍成員（{{ filteredActiveMembers.length }} 人）</h3>
       <div class="sheet-container" ref="activeSheetEl">
         <table :class="{ 'mobile-compact': isMobile }">
           <thead>
@@ -515,7 +581,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(member, index) in activeMembers" :key="member.id" class="active-row">
+            <tr v-for="(member, index) in filteredActiveMembers" :key="member.id" class="active-row">
               <td v-if="!isMobile" class="frozen-1">{{ index + 1 }}</td>
               <td class="frozen-2 member-link" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
               <td class="frozen-3 cell-clickable" @click="toggleIntro(member)">
@@ -532,14 +598,14 @@
                      title="點擊獨立標記黃牌/紅牌，不影響讚數">{{ flagEmoji(getRecord(member, week.id).flag) }}</div>
               </td>
             </tr>
-            <tr v-if="activeMembers.length === 0">
-              <td :colspan="weeks.length + (isMobile ? 2 : 3)" style="color: var(--text-muted); padding: 20px;">目前沒有活躍成員</td>
+            <tr v-if="filteredActiveMembers.length === 0">
+              <td :colspan="weeks.length + (isMobile ? 2 : 3)" style="color: var(--text-muted); padding: 20px;">{{ currentGroupFilter ? '這個群組目前沒有活躍成員' : '目前沒有活躍成員' }}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <h3 class="section-title">🔴 退出成員（{{ exitedMembers.length }} 人）</h3>
+      <h3 class="section-title">🔴 退出成員（{{ filteredExitedMembers.length }} 人）</h3>
       <div class="sheet-container exited-container">
         <table class="exited-table">
           <thead>
@@ -548,7 +614,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="member in exitedMembers" :key="member.id">
+            <tr v-for="member in filteredExitedMembers" :key="member.id">
               <td class="name-cell member-link" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
               <td>{{ member.intro ? '👍' : '—' }}</td>
               <td>{{ member.joinDate || '未記錄' }}</td>
@@ -564,8 +630,8 @@
                 <button class="small danger" style="margin-left:6px" @click="deleteMember(member)">🗑 刪除</button>
               </td>
             </tr>
-            <tr v-if="exitedMembers.length === 0">
-              <td colspan="7" style="color: var(--text-muted); padding: 20px;">目前沒有退出成員</td>
+            <tr v-if="filteredExitedMembers.length === 0">
+              <td colspan="7" style="color: var(--text-muted); padding: 20px;">{{ currentGroupFilter ? '這個群組目前沒有退出成員' : '目前沒有退出成員' }}</td>
             </tr>
           </tbody>
         </table>
@@ -626,13 +692,19 @@
         <table class="info-table">
           <thead>
             <tr>
-              <th>姓名</th><th>國籍</th><th>年齡</th><th>入群時間</th>
+              <th>姓名</th><th>群組</th><th>國籍</th><th>年齡</th><th>入群時間</th>
               <th>累計語音則數</th><th>參與週數</th><th>出席率</th><th>🟨</th><th>🟥</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="m in activeMemberInfoList" :key="m.member.id">
               <td class="member-link" @click="goToMemberDetail(m.member.id)">{{ m.member.name }}</td>
+              <td>
+                <select v-model="m.member.groupId">
+                  <option value="">未分組</option>
+                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+                </select>
+              </td>
               <td><input type="text" v-model="m.member.nationality" placeholder="國籍"></td>
               <td><input type="number" v-model="m.member.age" placeholder="年齡"></td>
               <td><input type="date" v-model="m.member.joinDate"></td>
@@ -651,7 +723,7 @@
         <table class="info-table">
           <thead>
             <tr>
-              <th>姓名</th><th>國籍</th><th>年齡</th><th>入群時間</th>
+              <th>姓名</th><th>群組</th><th>國籍</th><th>年齡</th><th>入群時間</th>
               <th>退群時間</th><th>退群原因</th><th>重新加入資格</th>
               <th>累計語音則數</th><th>🟨</th><th>🟥</th><th>操作</th>
             </tr>
@@ -659,6 +731,12 @@
           <tbody>
             <tr v-for="m in exitedMemberInfoList" :key="m.member.id">
               <td class="member-link" @click="goToMemberDetail(m.member.id)">{{ m.member.name }}</td>
+              <td>
+                <select v-model="m.member.groupId">
+                  <option value="">未分組</option>
+                  <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+                </select>
+              </td>
               <td><input type="text" v-model="m.member.nationality" placeholder="國籍"></td>
               <td><input type="number" v-model="m.member.age" placeholder="年齡"></td>
               <td><input type="date" v-model="m.member.joinDate"></td>
@@ -716,6 +794,46 @@
           <div class="participant-count">{{ participantsForWeek(week).length }} 人參加</div>
         </div>
         <div v-if="weeks.length === 0" class="text-muted" style="margin-top: 14px;">目前還沒有任何週次，請先新增。</div>
+      </div>
+    </div>
+
+    <!-- ============ 頁面五：群組管理 ============ -->
+    <div v-if="currentPage === 'groupManage'" class="page-container">
+      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <h2>群組管理</h2>
+      <span class="text-muted">新增、修改、刪除群組，並選擇成員加入。每位成員只能屬於一個群組，勾選某個群組會自動把該成員從原本的群組移出。</span>
+
+      <div class="control-panel" style="margin-top: 14px;">
+        <div class="control-group">
+          <strong>新增群組：</strong>
+          <input type="text" v-model="newGroupName" placeholder="例: 初級班" style="width:140px;" @keyup.enter="addGroup">
+          <button @click="addGroup">新增</button>
+        </div>
+      </div>
+
+      <div class="group-cards">
+        <div class="group-card" v-for="group in groups" :key="group.id">
+          <div class="group-card-head">
+            <div class="group-card-title">
+              <span class="name">{{ group.name }}</span>
+              <span class="count">{{ groupMemberCount(group.id) }} 位成員</span>
+            </div>
+            <div class="group-card-actions">
+              <button class="small secondary" @click="toggleGroupExpand(group.id)">{{ expandedGroupId === group.id ? '收起成員' : '👥 管理成員' }}</button>
+              <button class="small secondary" @click="renameGroup(group)">✏️ 改名</button>
+              <button class="small danger" @click="deleteGroup(group)">🗑 刪除</button>
+            </div>
+          </div>
+          <div class="group-member-picker" v-if="expandedGroupId === group.id">
+            <label v-for="m in members" :key="m.id">
+              <input type="checkbox" :checked="m.groupId === group.id" @change="toggleMemberGroup(m, group.id)">
+              {{ m.name }}
+              <span v-if="m.status === 'exited'" class="exited-tag">（已退出）</span>
+            </label>
+            <span v-if="members.length === 0" class="empty-note">目前還沒有任何成員</span>
+          </div>
+        </div>
+        <div v-if="groups.length === 0" class="text-muted" style="margin-top: 14px;">目前還沒有任何群組，請先新增。</div>
       </div>
     </div>
 
@@ -822,15 +940,23 @@
       const { doc, setDoc } = window.__firebaseModules;
       await setDoc(doc(db, 'whatsappGroup', 'members'), { data: membersData });
     }
+    async function saveGroupsToFirebase(groupsData) {
+      const db = await ensureFirebase();
+      if (!db) return;
+      const { doc, setDoc } = window.__firebaseModules;
+      await setDoc(doc(db, 'whatsappGroup', 'groups'), { data: groupsData });
+    }
     async function loadFromFirebase() {
       const db = await ensureFirebase();
       if (!db) return null;
       const { doc, getDoc } = window.__firebaseModules;
       const weeksSnap = await getDoc(doc(db, 'whatsappGroup', 'weeks'));
       const membersSnap = await getDoc(doc(db, 'whatsappGroup', 'members'));
+      const groupsSnap = await getDoc(doc(db, 'whatsappGroup', 'groups'));
       return {
         weeks: weeksSnap.exists() ? weeksSnap.data().data : null,
-        members: membersSnap.exists() ? membersSnap.data().data : null
+        members: membersSnap.exists() ? membersSnap.data().data : null,
+        groups: groupsSnap.exists() ? groupsSnap.data().data : null
       };
     }
     // ============================================================
@@ -878,6 +1004,7 @@
       setup() {
         const savedWeeks = localStorage.getItem('sheetWeeks');
         const savedMembers = localStorage.getItem('sheetMembers');
+        const savedGroups = localStorage.getItem('sheetGroups');
 
         const weeks = ref(savedWeeks ? JSON.parse(savedWeeks) : [
           { id: 'w_demo1', name: '7/20 很熱', date: guessDateFromWeekName('7/20 很熱'), note: '' }
@@ -886,6 +1013,8 @@
         const members = ref(savedMembers ? JSON.parse(savedMembers) : [
           { id: 'm1', name: 'Pablo', status: 'active', intro: true, records: { 'w_demo1': { count: 1, flag: null } } }
         ]);
+
+        const groups = ref(savedGroups ? JSON.parse(savedGroups) : []);
 
         // 資料遷移：補齊欄位、把舊版字串紀錄轉成新的 {count,flag} 物件格式。
         // 可重複呼叫（本機載入時、雲端資料回來後都會跑一次）
@@ -901,6 +1030,7 @@
             if (m.exitDate === undefined) m.exitDate = '';
             else if (/^\d{1,2}\/\d{1,2}$/.test(m.exitDate)) m.exitDate = guessIsoFromShortDate(m.exitDate);
             if (m.exitReason === undefined) m.exitReason = '';
+            if (m.groupId === undefined) m.groupId = '';
             if (m.records === undefined) m.records = {};
             Object.keys(m.records).forEach(wid => {
               let val = m.records[wid];
@@ -948,9 +1078,17 @@
           if (FIREBASE_ENABLED) saveMembersToFirebase(newVal);
         }, { deep: true });
 
+        watch(groups, (newVal) => {
+          localStorage.setItem('sheetGroups', JSON.stringify(newVal));
+          if (FIREBASE_ENABLED) saveGroupsToFirebase(newVal);
+        }, { deep: true });
+
         const newWeekName = ref('');
         const newWeekDate = ref(todayStr());
         const newMember = ref('');
+        const newGroupName = ref('');
+        const currentGroupFilter = ref('');
+        const expandedGroupId = ref(null);
 
         // 週次練習表頁面：由新到舊顯示（不影響主表格 weeks 本身的順序）
         const weeksNewestFirst = computed(() => [...weeks.value].reverse());
@@ -1083,7 +1221,7 @@
         const cancelWeekEdit = () => { weekEditModal.value.visible = false; };
 
         // ===== 頁面切換 =====
-        const currentPage = ref('main'); // 'main' | 'memberDetail' | 'memberInfo' | 'weekList'
+        const currentPage = ref('main'); // 'main' | 'memberDetail' | 'memberInfo' | 'weekList' | 'groupManage'
         const selectedMemberId = ref(null);
 
         watch(currentPage, (val) => {
@@ -1100,6 +1238,7 @@
           if (cloudData) {
             if (cloudData.weeks) weeks.value = cloudData.weeks;
             if (cloudData.members) members.value = cloudData.members;
+            if (cloudData.groups) groups.value = cloudData.groups;
             migrateData(); // 雲端資料也要跑一次遷移，避免舊欄位造成 undefined
             scrollToLatestWeek();
             console.log('資料同步完成！');
@@ -1108,6 +1247,14 @@
 
         const activeMembers = computed(() => members.value.filter(m => m.status === 'active'));
         const exitedMembers = computed(() => members.value.filter(m => m.status === 'exited'));
+
+        // 主頁群組分頁篩選：currentGroupFilter 為空字串時顯示全體
+        const filteredActiveMembers = computed(() =>
+          currentGroupFilter.value ? activeMembers.value.filter(m => m.groupId === currentGroupFilter.value) : activeMembers.value
+        );
+        const filteredExitedMembers = computed(() =>
+          currentGroupFilter.value ? exitedMembers.value.filter(m => m.groupId === currentGroupFilter.value) : exitedMembers.value
+        );
 
         const selectedMember = computed(() => members.value.find(m => m.id === selectedMemberId.value) || null);
 
@@ -1242,6 +1389,50 @@
           }
         };
 
+        // ===== 群組管理 =====
+        const groupMemberCount = (groupId) => members.value.filter(m => m.groupId === groupId).length;
+
+        const addGroup = () => {
+          if (!newGroupName.value.trim()) return;
+          groups.value.push({ id: 'g_' + Date.now(), name: newGroupName.value.trim() });
+          newGroupName.value = '';
+        };
+
+        const renameGroup = async (group) => {
+          const name = await showPrompt({
+            title: '修改群組名稱', message: '請輸入新的群組名稱：',
+            defaultValue: group.name, placeholder: '群組名稱'
+          });
+          if (name !== null && name.trim()) {
+            group.name = name.trim();
+          }
+        };
+
+        const deleteGroup = async (group) => {
+          const count = groupMemberCount(group.id);
+          const ok = await showConfirm({
+            title: '刪除群組', danger: true, confirmText: '刪除',
+            message: count > 0
+              ? `確定要刪除「${group.name}」嗎？\n目前有 ${count} 位成員屬於這個群組，刪除後他們會變成未分組，成員本身的紀錄不會被刪除。`
+              : `確定要刪除「${group.name}」嗎？`
+          });
+          if (ok) {
+            groups.value = groups.value.filter(g => g.id !== group.id);
+            members.value.forEach(m => { if (m.groupId === group.id) m.groupId = ''; });
+            if (currentGroupFilter.value === group.id) currentGroupFilter.value = '';
+            if (expandedGroupId.value === group.id) expandedGroupId.value = null;
+          }
+        };
+
+        const toggleGroupExpand = (groupId) => {
+          expandedGroupId.value = expandedGroupId.value === groupId ? null : groupId;
+        };
+
+        // 每位成員只能屬於一個群組：勾選某群組會自動蓋掉原本的 groupId
+        const toggleMemberGroup = (member, groupId) => {
+          member.groupId = member.groupId === groupId ? '' : groupId;
+        };
+
         return {
           weeks, members, newWeekName, newWeekDate, newMember,
           activeMembers, exitedMembers,
@@ -1253,7 +1444,10 @@
           goToMemberDetail, isBeforeJoin, canRejoin, daysUntilRejoin,
           modal, modalInputEl, modalConfirmClick, modalCancelClick,
           weeksNewestFirst, participantsForWeek, activeSheetEl, isMobile, latestWeekId,
-          getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag
+          getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag,
+          groups, newGroupName, currentGroupFilter, expandedGroupId,
+          filteredActiveMembers, filteredExitedMembers, groupMemberCount,
+          addGroup, renameGroup, deleteGroup, toggleGroupExpand, toggleMemberGroup
         };
       }
     }).mount('#app');
