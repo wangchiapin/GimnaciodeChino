@@ -468,6 +468,10 @@
     .participant-chip.is-exited { opacity: 0.55; }
     .participant-count { font-size: 0.82em; color: var(--text-muted); margin-top: 8px; }
 
+    /* ===== 成員資訊頁：可編輯姓名欄 ===== */
+    .name-edit-input { width: 90px; }
+    .detail-link-btn { margin-left: 4px; padding: 2px 6px; }
+
     /* ===== 主頁：群組分頁 ===== */
     .group-tabs {
       display: flex;
@@ -487,6 +491,15 @@
     }
     .group-tab:hover { background: var(--primary-soft); color: var(--text); }
     .group-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .group-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      border: 1px solid rgba(0,0,0,0.15);
+    }
 
     /* ===== 群組管理頁面 ===== */
     .group-cards { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
@@ -559,7 +572,9 @@
 
       <div class="group-tabs">
         <button class="group-tab" :class="{ active: currentGroupFilter === '' }" @click="currentGroupFilter = ''">全體</button>
-        <button v-for="g in groups" :key="g.id" class="group-tab" :class="{ active: currentGroupFilter === g.id }" @click="currentGroupFilter = g.id">{{ g.name }}</button>
+        <button v-for="g in groups" :key="g.id" class="group-tab" :class="{ active: currentGroupFilter === g.id }" @click="currentGroupFilter = g.id">
+          <span class="group-dot" :style="{ backgroundColor: groupColor(g.id) }"></span>{{ g.name }}
+        </button>
       </div>
 
       <h3 class="section-title">🟢 活躍成員（{{ filteredActiveMembers.length }} 人）</h3>
@@ -583,7 +598,7 @@
           <tbody>
             <tr v-for="(member, index) in filteredActiveMembers" :key="member.id" class="active-row">
               <td v-if="!isMobile" class="frozen-1">{{ index + 1 }}</td>
-              <td class="frozen-2 member-link" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
+              <td class="frozen-2 member-link" :style="{ backgroundColor: groupColor(member.groupId) }" @click="goToMemberDetail(member.id)">{{ member.name }}</td>
               <td class="frozen-3 cell-clickable" @click="toggleIntro(member)">
                 {{ member.intro ? '👍' : '' }}
               </td>
@@ -698,7 +713,10 @@
           </thead>
           <tbody>
             <tr v-for="m in activeMemberInfoList" :key="m.member.id">
-              <td class="member-link" @click="goToMemberDetail(m.member.id)">{{ m.member.name }}</td>
+              <td class="name-cell">
+                <input type="text" v-model="m.member.name" class="name-edit-input" placeholder="姓名">
+                <button class="small secondary detail-link-btn" @click="goToMemberDetail(m.member.id)" title="查看詳細資料">🔍</button>
+              </td>
               <td>
                 <select v-model="m.member.groupId">
                   <option value="">未分組</option>
@@ -730,7 +748,10 @@
           </thead>
           <tbody>
             <tr v-for="m in exitedMemberInfoList" :key="m.member.id">
-              <td class="member-link" @click="goToMemberDetail(m.member.id)">{{ m.member.name }}</td>
+              <td class="name-cell">
+                <input type="text" v-model="m.member.name" class="name-edit-input" placeholder="姓名">
+                <button class="small secondary detail-link-btn" @click="goToMemberDetail(m.member.id)" title="查看詳細資料">🔍</button>
+              </td>
               <td>
                 <select v-model="m.member.groupId">
                   <option value="">未分組</option>
@@ -825,12 +846,11 @@
             </div>
           </div>
           <div class="group-member-picker" v-if="expandedGroupId === group.id">
-            <label v-for="m in members" :key="m.id">
+            <label v-for="m in activeMembers" :key="m.id">
               <input type="checkbox" :checked="m.groupId === group.id" @change="toggleMemberGroup(m, group.id)">
               {{ m.name }}
-              <span v-if="m.status === 'exited'" class="exited-tag">（已退出）</span>
             </label>
-            <span v-if="members.length === 0" class="empty-note">目前還沒有任何成員</span>
+            <span v-if="activeMembers.length === 0" class="empty-note">目前還沒有任何活躍成員</span>
           </div>
         </div>
         <div v-if="groups.length === 0" class="text-muted" style="margin-top: 14px;">目前還沒有任何群組，請先新增。</div>
@@ -960,6 +980,9 @@
       };
     }
     // ============================================================
+
+    // 群組配色盤：依群組在 groups 陣列中的順序循環使用
+    const GROUP_COLOR_PALETTE = ['#ffe0e0', '#dbeafe', '#dcfce7', '#fef3c7', '#ede9fe', '#ffe4d6', '#e0f2fe', '#fce7f3'];
 
     function todayStr() {
       const d = new Date();
@@ -1390,7 +1413,15 @@
         };
 
         // ===== 群組管理 =====
-        const groupMemberCount = (groupId) => members.value.filter(m => m.groupId === groupId).length;
+        const groupMemberCount = (groupId) => members.value.filter(m => m.status === 'active' && m.groupId === groupId).length;
+
+        // 依群組在 groups 陣列中的順序，回傳固定的底色；未分組回傳透明
+        const groupColor = (groupId) => {
+          if (!groupId) return 'transparent';
+          const idx = groups.value.findIndex(g => g.id === groupId);
+          if (idx === -1) return 'transparent';
+          return GROUP_COLOR_PALETTE[idx % GROUP_COLOR_PALETTE.length];
+        };
 
         const addGroup = () => {
           if (!newGroupName.value.trim()) return;
@@ -1447,7 +1478,7 @@
           getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag,
           groups, newGroupName, currentGroupFilter, expandedGroupId,
           filteredActiveMembers, filteredExitedMembers, groupMemberCount,
-          addGroup, renameGroup, deleteGroup, toggleGroupExpand, toggleMemberGroup
+          addGroup, renameGroup, deleteGroup, toggleGroupExpand, toggleMemberGroup, groupColor
         };
       }
     }).mount('#app');
