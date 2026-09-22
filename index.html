@@ -20,12 +20,12 @@
   -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     // 新增：引入 Auth 模組
     import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     
     // 新增：把 getAuth 和 signInAnonymously 加進對外橋樑
-    window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc, getAuth, signInAnonymously };
+    window.__firebaseModules = { initializeApp, getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence, getAuth, signInAnonymously };
   </script>
 
   <style>
@@ -279,6 +279,23 @@
     .badge-success { background: var(--success-soft); color: #15803d; }
     .badge-warning { background: var(--warning-soft); color: #b45309; }
     .badge-muted { background: #eef0f4; color: var(--text-muted); }
+
+    /* ===== 雲端同步狀態小標籤：固定在右上角，任何頁面都看得到 ===== */
+    .sync-indicator {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 50;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.78em;
+      font-weight: 600;
+      box-shadow: var(--shadow);
+      cursor: default;
+    }
+    .sync-indicator.sync-saving { background: var(--warning-soft); color: #b45309; }
+    .sync-indicator.sync-synced { background: var(--success-soft); color: #15803d; }
+    .sync-indicator.sync-error { background: var(--danger-soft); color: var(--danger); cursor: help; }
 
     /* ===== 個別頁面（成員統計 / 成員資訊）===== */
     .page-container {
@@ -545,6 +562,12 @@
 <body>
   <div id="app">
 
+    <div class="sync-indicator" :class="'sync-' + syncStatus" v-if="syncStatus !== 'idle'" :title="syncStatus === 'error' ? ('同步失敗：' + lastSyncError + '　請確認網路連線，稍後會在下一次修改時自動重試') : ''">
+      <span v-if="syncStatus === 'saving'">🔄 同步中...</span>
+      <span v-else-if="syncStatus === 'synced'">☁️ 已同步</span>
+      <span v-else-if="syncStatus === 'error'">⚠️ 同步失敗，點我看原因</span>
+    </div>
+
     <div class="brand-header">
       <h1>中文健身房 <span class="brand-en">Gimnacio de Chino</span></h1>
       <div class="brand-sub">by @cadadiaunosminutos</div>
@@ -578,7 +601,7 @@
       </div>
 
       <h3 class="section-title">🟢 活躍成員（{{ filteredActiveMembers.length }} 人）</h3>
-      <div class="sheet-container" ref="activeSheetEl">
+      <div class="sheet-container" ref="activeSheetEl" :style="activeTableHeight ? { height: activeTableHeight } : {}">
         <table :class="{ 'mobile-compact': isMobile }">
           <thead>
             <tr>
@@ -924,60 +947,113 @@
     }
 
     let firebaseDb = null;
-    async function ensureFirebase() {
-      if (!FIREBASE_ENABLED || firebaseDb) return firebaseDb;
-      if (!window.__firebaseModules) {
-        console.warn('Firebase SDK 尚未載入。');
-        return null;
-      }
-      
-      // 新增：把 getAuth, signInAnonymously 一併解構出來
-      const { initializeApp, getFirestore, getAuth, signInAnonymously } = window.__firebaseModules;
-      const app = initializeApp(initFirebaseConfig());
-      firebaseDb = getFirestore(app);
-      
-      // 新增：執行匿名登入
-      const auth = getAuth(app);
-      try {
-        await signInAnonymously(auth);
-        console.log("Firebase 匿名登入成功！");
-      } catch (error) {
-        console.error("Firebase 匿名登入失敗:", error);
-      }
+    let firebaseInitPromise = null;
 
-      return firebaseDb;
+    // 同步狀態（模組層級，Firebase 存取函式與 Vue 元件共用同一份）：
+    // 'idle' 還沒動作過／'saving' 正在寫入／'synced' 已同步／'error' 上次寫入失敗
+    const syncStatus = ref('idle');
+    const lastSyncError = ref('');
+    // 用「單一進行中 promise」避免競爭條件：
+    // 舊版在 initializeApp() 之後就立刻把 firebaseDb 設成非 null，
+    // 但這時候匿名登入 (signInAnonymously) 可能還沒完成。如果短時間內
+    // 有好幾個地方（weeks / members / groups 同時變動）幾乎同時呼叫
+    // ensureFirebase()，後面幾個呼叫會看到 firebaseDb 已經有值，
+    // 直接跳過等待登入完成，就送出寫入——如果 Firestore 規則要求要
+    // 登入才能寫入，這些寫入會因為還沒登入完成而被拒絕，而且沒有
+    // catch，所以會「靜靜地失敗」：畫面上看起來存好了，其實雲端根本
+    // 沒收到，換一台裝置打開就會看到內容「消失」。
+    // 改成回傳同一個 promise，所有呼叫者都會等到「真正登入完成」才繼續。
+    async function ensureFirebase() {
+      if (!FIREBASE_ENABLED) return null;
+      if (firebaseDb) return firebaseDb;
+      if (!firebaseInitPromise) {
+        firebaseInitPromise = (async () => {
+          if (!window.__firebaseModules) {
+            console.warn('Firebase SDK 尚未載入。');
+            return null;
+          }
+          const { initializeApp, getFirestore, enableIndexedDbPersistence, getAuth, signInAnonymously } = window.__firebaseModules;
+          const app = initializeApp(initFirebaseConfig());
+          const db = getFirestore(app);
+
+          // 盡量啟用離線暫存：手機網路不穩時，寫入會先存在裝置本機，
+          // 恢復連線後自動補送，減少「編輯完但沒真的送到雲端」的情況。
+          // 多分頁同時開啟時可能會啟用失敗，失敗就照舊（只是沒有離線暫存），不影響其他功能。
+          try {
+            await enableIndexedDbPersistence(db);
+          } catch (error) {
+            console.warn('Firestore 離線暫存未啟用（可能因為開了多個分頁）：', error.code || error);
+          }
+
+          const auth = getAuth(app);
+          try {
+            await signInAnonymously(auth);
+            console.log('Firebase 匿名登入成功！');
+          } catch (error) {
+            console.error('Firebase 匿名登入失敗:', error);
+          }
+
+          firebaseDb = db;
+          return db;
+        })();
+      }
+      return firebaseInitPromise;
+    }
+
+    // 統一的儲存流程：任何一次寫入失敗都會被抓到並反映在 syncStatus 上，
+    // 不會再默默消失。呼叫端（saveWeeksToFirebase 等）都走這個函式。
+    async function saveDocToFirebase(docName, data) {
+      const db = await ensureFirebase();
+      if (!db) {
+        syncStatus.value = 'error';
+        lastSyncError.value = '尚未連上雲端資料庫';
+        return false;
+      }
+      const { doc, setDoc } = window.__firebaseModules;
+      syncStatus.value = 'saving';
+      try {
+        await setDoc(doc(db, 'whatsappGroup', docName), { data });
+        syncStatus.value = 'synced';
+        lastSyncError.value = '';
+        return true;
+      } catch (error) {
+        console.error(`儲存「${docName}」到 Firebase 失敗：`, error);
+        syncStatus.value = 'error';
+        lastSyncError.value = (error && error.message) ? error.message : String(error);
+        return false;
+      }
     }
 
     async function saveWeeksToFirebase(weeksData) {
-      const db = await ensureFirebase();
-      if (!db) return;
-      const { doc, setDoc } = window.__firebaseModules;
-      await setDoc(doc(db, 'whatsappGroup', 'weeks'), { data: weeksData });
+      return saveDocToFirebase('weeks', weeksData);
     }
     async function saveMembersToFirebase(membersData) {
-      const db = await ensureFirebase();
-      if (!db) return;
-      const { doc, setDoc } = window.__firebaseModules;
-      await setDoc(doc(db, 'whatsappGroup', 'members'), { data: membersData });
+      return saveDocToFirebase('members', membersData);
     }
     async function saveGroupsToFirebase(groupsData) {
-      const db = await ensureFirebase();
-      if (!db) return;
-      const { doc, setDoc } = window.__firebaseModules;
-      await setDoc(doc(db, 'whatsappGroup', 'groups'), { data: groupsData });
+      return saveDocToFirebase('groups', groupsData);
     }
     async function loadFromFirebase() {
       const db = await ensureFirebase();
       if (!db) return null;
       const { doc, getDoc } = window.__firebaseModules;
-      const weeksSnap = await getDoc(doc(db, 'whatsappGroup', 'weeks'));
-      const membersSnap = await getDoc(doc(db, 'whatsappGroup', 'members'));
-      const groupsSnap = await getDoc(doc(db, 'whatsappGroup', 'groups'));
-      return {
-        weeks: weeksSnap.exists() ? weeksSnap.data().data : null,
-        members: membersSnap.exists() ? membersSnap.data().data : null,
-        groups: groupsSnap.exists() ? groupsSnap.data().data : null
-      };
+      try {
+        const weeksSnap = await getDoc(doc(db, 'whatsappGroup', 'weeks'));
+        const membersSnap = await getDoc(doc(db, 'whatsappGroup', 'members'));
+        const groupsSnap = await getDoc(doc(db, 'whatsappGroup', 'groups'));
+        syncStatus.value = 'synced';
+        lastSyncError.value = '';
+        return {
+          weeks: weeksSnap.exists() ? weeksSnap.data().data : null,
+          members: membersSnap.exists() ? membersSnap.data().data : null,
+          groups: groupsSnap.exists() ? groupsSnap.data().data : null
+        };
+      } catch (error) {
+        console.error('從 Firebase 讀取資料失敗：', error);
+        syncStatus.value = 'error';
+        lastSyncError.value = (error && error.message) ? error.message : String(error);
+        return null;
+      }
     }
     // ============================================================
 
@@ -1091,9 +1167,32 @@
           isMobile.value = window.innerWidth <= 640;
         }
 
+        // 桌面版「活躍成員」表格固定高度：精算成「表頭高度 + 10 列資料」，
+        // 讓標題和剛好 10 位成員可以完整顯示、不需要在容器內捲動。
+        // 資料列高度直接用 .week-cell 的 52px（border-box，已含 padding），
+        // 表頭高度則用 DOM 量測，因為表頭是週名/日期/編輯圖示三行組成，
+        // 實際高度會依字型渲染而變化，用量測的比用猜的準。
+        const activeTableHeight = ref('');
+        const ACTIVE_ROW_HEIGHT = 52;
+        const ACTIVE_VISIBLE_ROWS = 10;
+        function updateActiveTableHeight() {
+          nextTick(() => {
+            if (isMobile.value) {
+              activeTableHeight.value = ''; // 手機版維持原本的 CSS 預設高度（56vh），不套用固定列數
+              return;
+            }
+            const el = activeSheetEl.value;
+            const headerRow = el && el.querySelector('thead tr');
+            if (!headerRow) return;
+            const headerHeight = headerRow.getBoundingClientRect().height;
+            activeTableHeight.value = Math.ceil(headerHeight + ACTIVE_ROW_HEIGHT * ACTIVE_VISIBLE_ROWS) + 'px';
+          });
+        }
+
         watch(weeks, (newVal) => {
           localStorage.setItem('sheetWeeks', JSON.stringify(newVal));
           if (FIREBASE_ENABLED) saveWeeksToFirebase(newVal);
+          updateActiveTableHeight(); // 週次增減不會改變表頭高度（nowrap），但保險起見還是重新量一次
         }, { deep: true });
 
         watch(members, (newVal) => {
@@ -1251,18 +1350,53 @@
           if (val === 'main') scrollToLatestWeek();
         });
 
+        // 把從雲端讀到的資料套用回畫面；回傳是否真的有資料可套用
+        function applyCloudData(cloudData) {
+          if (!cloudData) return false;
+          if (cloudData.weeks) weeks.value = cloudData.weeks;
+          if (cloudData.members) members.value = cloudData.members;
+          if (cloudData.groups) groups.value = cloudData.groups;
+          migrateData(); // 雲端資料也要跑一次遷移，避免舊欄位造成 undefined
+          updateActiveTableHeight();
+          return true;
+        }
+
+        // 重新從雲端拉最新資料，蓋掉畫面上現有的內容。
+        // 用在「分頁閒置一陣子後重新被打開」的情境：避免某台裝置留著舊分頁沒關，
+        // 之後隨手改了什麼，就把其他裝置（例如手機）剛剛存上去的新資料蓋掉。
+        // 如果使用者正在某個輸入框打字，先不刷新，避免打斷輸入。
+        async function refreshFromFirebase() {
+          if (!FIREBASE_ENABLED) return;
+          const active = document.activeElement;
+          if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) return;
+          const cloudData = await loadFromFirebase();
+          applyCloudData(cloudData);
+        }
+
+        // 分頁被切走超過 15 秒才重新整理，避免只是快速切一下也跟著重抓
+        let lastHiddenAt = null;
+        function handleVisibilityChange() {
+          if (document.visibilityState === 'hidden') {
+            lastHiddenAt = Date.now();
+          } else if (document.visibilityState === 'visible') {
+            const hiddenForMs = lastHiddenAt ? (Date.now() - lastHiddenAt) : 0;
+            if (hiddenForMs > 15000) refreshFromFirebase();
+          }
+        }
+
         onMounted(async () => {
           scrollToLatestWeek();
           updateIsMobile();
-          window.addEventListener('resize', updateIsMobile);
+          updateActiveTableHeight();
+          window.addEventListener('resize', () => { updateIsMobile(); updateActiveTableHeight(); });
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+          if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(updateActiveTableHeight); // 字型載入完成後高度可能會變，重新量一次
+          }
           if (!FIREBASE_ENABLED) return;
           console.log('正在從 Firebase 載入最新資料...');
           const cloudData = await loadFromFirebase();
-          if (cloudData) {
-            if (cloudData.weeks) weeks.value = cloudData.weeks;
-            if (cloudData.members) members.value = cloudData.members;
-            if (cloudData.groups) groups.value = cloudData.groups;
-            migrateData(); // 雲端資料也要跑一次遷移，避免舊欄位造成 undefined
+          if (applyCloudData(cloudData)) {
             scrollToLatestWeek();
             console.log('資料同步完成！');
           }
@@ -1474,7 +1608,8 @@
           activeMemberInfoList, exitedMemberInfoList,
           goToMemberDetail, isBeforeJoin, canRejoin, daysUntilRejoin,
           modal, modalInputEl, modalConfirmClick, modalCancelClick,
-          weeksNewestFirst, participantsForWeek, activeSheetEl, isMobile, latestWeekId,
+          weeksNewestFirst, participantsForWeek, activeSheetEl, isMobile, latestWeekId, activeTableHeight,
+          syncStatus, lastSyncError,
           getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag,
           groups, newGroupName, currentGroupFilter, expandedGroupId,
           filteredActiveMembers, filteredExitedMembers, groupMemberCount,
