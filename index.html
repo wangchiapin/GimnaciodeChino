@@ -30,25 +30,26 @@
 
   <style>
     :root {
-      --bg: #f3f4f9;
-      --surface: #ffffff;
-      --primary: #4f46e5;
-      --primary-dark: #4338ca;
-      --primary-soft: #eef0fd;
-      --accent: #0891b2;
-      --success: #16a34a;
-      --success-soft: #dcfce7;
-      --warning: #d97706;
-      --warning-soft: #fef3c7;
-      --danger: #dc2626;
-      --danger-soft: #fee2e2;
-      --text: #1e2130;
-      --text-muted: #6b7280;
-      --border: #e3e5ee;
-      --radius: 14px;
-      --radius-sm: 8px;
-      --shadow: 0 1px 3px rgba(30, 33, 48, 0.06), 0 1px 2px rgba(30, 33, 48, 0.04);
-      --shadow-lg: 0 12px 32px rgba(30, 33, 48, 0.14);
+      /* 無印風格：米白紙色、原木灰褐、極淡的線，重點只用無印紅 */
+      --bg: #f4f1ea;
+      --surface: #fdfcf9;
+      --primary: #4a4540;
+      --primary-dark: #2f2c28;
+      --primary-soft: #ece7dd;
+      --accent: #7f0019;
+      --success: #5c7a52;
+      --success-soft: #e4eadc;
+      --warning: #9a7b2f;
+      --warning-soft: #f0e8d0;
+      --danger: #7f0019;
+      --danger-soft: #f1e0dc;
+      --text: #3d3a35;
+      --text-muted: #8b857a;
+      --border: #ddd7ca;
+      --radius: 4px;
+      --radius-sm: 3px;
+      --shadow: none;
+      --shadow-lg: 0 8px 24px rgba(61, 58, 53, 0.14);
     }
 
     * { box-sizing: border-box; }
@@ -59,15 +60,18 @@
       padding: 24px;
       background: var(--bg);
       color: var(--text);
+      line-height: 1.6;
+      letter-spacing: 0.02em;
     }
 
-    h2 { font-size: 1.4em; margin: 0 0 4px; }
-    h3.section-title { font-size: 1.05em; font-weight: 600; color: var(--text); margin: 28px 0 10px; display: flex; align-items: center; gap: 8px; }
+    h2 { font-size: 1.3em; font-weight: 500; margin: 0 0 4px; letter-spacing: 0.06em; }
+    h3.section-title { font-size: 1em; font-weight: 500; letter-spacing: 0.08em; color: var(--text); margin: 28px 0 10px; display: flex; align-items: center; gap: 8px; }
 
     .control-panel {
       margin-bottom: 20px;
-      padding: 18px 20px;
+      padding: 16px 20px;
       background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
       display: flex;
@@ -76,7 +80,7 @@
       gap: 10px 8px;
     }
     .control-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .control-group strong { font-size: 0.9em; color: var(--text-muted); font-weight: 600; }
+    .control-group strong { font-size: 0.9em; color: var(--text-muted); font-weight: 500; }
 
     input, select {
       padding: 7px 11px;
@@ -88,6 +92,7 @@
       color: var(--text);
     }
     input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+    input, select, textarea { background: #fff; }
 
     button {
       padding: 8px 16px;
@@ -98,17 +103,18 @@
       cursor: pointer;
       font-family: inherit;
       font-size: 0.92em;
-      font-weight: 600;
+      font-weight: 500;
+      letter-spacing: 0.04em;
       transition: background 0.15s ease, transform 0.05s ease;
     }
     button:hover { background: var(--primary-dark); }
     button:active { transform: scale(0.98); }
-    button.secondary { background: #eef0f4; color: var(--text); }
-    button.secondary:hover { background: #e2e5ec; }
+    button.secondary { background: var(--primary-soft); color: var(--text); }
+    button.secondary:hover { background: #e1dac9; }
     button.danger { background: var(--danger-soft); color: var(--danger); }
-    button.danger:hover { background: #fecaca; }
-    button.info-btn { background: var(--accent); }
-    button.info-btn:hover { background: #0e7490; }
+    button.danger:hover { background: #e8cdc7; }
+    button.info-btn { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+    button.info-btn:hover { background: var(--primary-soft); }
     button.small { padding: 4px 10px; font-size: 0.82em; }
 
     .text-muted { font-size: 0.85em; color: var(--text-muted); margin-top: 4px; display: block; width: 100%; line-height: 1.6; }
@@ -209,7 +215,7 @@
     .mobile-compact .corner-pin.pin-3 { left: 104px; padding: 8px 2px; }
 
     .cell-clickable { cursor: pointer; }
-    .cell-clickable:hover { background-color: #f5f6fb; }
+    .cell-clickable:hover { background-color: #f3efe6; }
 
     /* ===== 週次紀錄格：讚數與黃/紅牌分成上下兩層，各自獨立點擊 =====
        上層（cell-count）：點擊主格本身，依序切換讚數 0→👍→👍👍→👍👍👍→0，
@@ -232,20 +238,20 @@
       border-top: 2px dotted var(--border);
       opacity: 0.35;
     }
-    .cell-flag.flag-none:hover { opacity: 0.85; background: #f5f6fb; }
-    .cell-flag.flag-yellow { background: #fff7cd; }
-    .cell-flag.flag-red { background: #fee2e2; }
+    .cell-flag.flag-none:hover { opacity: 0.85; background: #f3efe6; }
+    .cell-flag.flag-yellow { background: #f3e6b8; }
+    .cell-flag.flag-red { background: #ecc9c3; }
 
     /* 最新一週整欄標示：淺藍底＋加粗左右邊框，垂直捲動時方便一眼認出是哪一欄 */
-    .latest-week-col { background-color: #dbeafe; box-shadow: inset -2px -1px 0 0 var(--primary), inset 2px 0 0 0 var(--primary); }
-    th.latest-week-col { background-color: #bfdbfe; box-shadow: inset -2px -1px 0 0 var(--primary), inset 2px 2px 0 0 var(--primary); }
+    .latest-week-col { background-color: #f4ecdc; box-shadow: inset -1px -1px 0 0 var(--accent), inset 1px 0 0 0 var(--accent); }
+    th.latest-week-col { background-color: #e9dcc2; box-shadow: inset -1px -1px 0 0 var(--accent), inset 1px 1px 0 0 var(--accent); }
 
     .member-link {
       cursor: pointer;
       color: var(--primary);
-      font-weight: 600;
+      font-weight: 500;
     }
-    .member-link:hover { color: var(--primary-dark); text-decoration: underline; }
+    .member-link:hover { color: var(--accent); text-decoration: underline; }
 
     /* 週次表頭的編輯/刪除按鈕 */
     .week-header-cell { position: relative; }
@@ -256,7 +262,7 @@
       cursor: pointer;
       font-size: 12px;
       padding: 1px 5px;
-      border-radius: 5px;
+      border-radius: 3px;
       background: rgba(255,255,255,0.7);
     }
     .week-actions span:hover { background: rgba(255,255,255,1); }
@@ -270,15 +276,15 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 3px 11px;
-      border-radius: 999px;
+      padding: 2px 10px;
+      border-radius: 3px;
       font-size: 0.8em;
-      font-weight: 600;
+      font-weight: 500;
       white-space: nowrap;
     }
-    .badge-success { background: var(--success-soft); color: #15803d; }
-    .badge-warning { background: var(--warning-soft); color: #b45309; }
-    .badge-muted { background: #eef0f4; color: var(--text-muted); }
+    .badge-success { background: var(--success-soft); color: #4d6b45; }
+    .badge-warning { background: var(--warning-soft); color: #8a6a1f; }
+    .badge-muted { background: var(--primary-soft); color: var(--text-muted); }
 
     /* ===== 雲端同步狀態小標籤：固定在右上角，任何頁面都看得到 ===== */
     .sync-indicator {
@@ -287,32 +293,34 @@
       right: 10px;
       z-index: 50;
       padding: 4px 12px;
-      border-radius: 999px;
+      border-radius: 3px;
       font-size: 0.78em;
-      font-weight: 600;
-      box-shadow: var(--shadow);
+      font-weight: 500;
+      border: 1px solid var(--border);
       cursor: default;
     }
-    .sync-indicator.sync-saving { background: var(--warning-soft); color: #b45309; }
-    .sync-indicator.sync-synced { background: var(--success-soft); color: #15803d; }
+    .sync-indicator.sync-saving { background: var(--warning-soft); color: #8a6a1f; }
+    .sync-indicator.sync-synced { background: var(--success-soft); color: #4d6b45; }
     .sync-indicator.sync-error { background: var(--danger-soft); color: var(--danger); cursor: help; }
 
     /* 雲端資料沒讀到時：鎖住畫面並顯示提示，避免舊資料覆蓋雲端 */
-    .lock-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(255,255,255,0.6); }
+    .lock-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(244,241,234,0.7); }
     .load-fail-banner {
       position: fixed; left: 10px; right: 10px; top: 10px; z-index: 95;
-      padding: 12px 14px; border-radius: 12px; line-height: 1.6;
+      padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--accent); line-height: 1.6;
       background: var(--danger-soft); color: var(--danger); font-size: 0.9em;
       box-shadow: 0 4px 16px rgba(0,0,0,0.15);
     }
     .load-fail-banner button { margin-left: 8px; }
-    .help-btn { background: var(--text-muted); }
+    .help-btn { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 5px 12px; font-size: 0.85em; }
+    .help-btn:hover { background: var(--primary-soft); }
 
     /* ===== 個別頁面（成員統計 / 成員資訊）===== */
     .page-container {
       background: var(--surface);
       border-radius: var(--radius);
       padding: 26px 28px;
+      border: 1px solid var(--border);
       box-shadow: var(--shadow);
     }
     .page-container .secondary { margin-bottom: 14px; }
@@ -326,7 +334,7 @@
       min-width: 118px;
       text-align: center;
     }
-    .stat-card .num { font-size: 1.6em; font-weight: 700; color: var(--primary); }
+    .stat-card .num { font-size: 1.6em; font-weight: 500; color: var(--text); }
     .stat-card .label { font-size: 0.82em; color: var(--text-muted); margin-top: 4px; }
 
     .profile-grid {
@@ -342,7 +350,7 @@
 
     .rejoin-note { margin: 10px 0 4px; }
 
-    .info-table-wrap { overflow-x: auto; margin-top: 8px; border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+    .info-table-wrap { overflow-x: auto; margin-top: 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
     .info-table { border-collapse: separate; border-spacing: 0; width: 100%; }
     .info-table th, .info-table td { padding: 8px 12px; text-align: center; box-shadow: inset -1px -1px 0 0 var(--border); background: var(--surface); min-width: auto; }
     .info-table th { background-color: var(--primary-soft); font-weight: 600; font-size: 0.85em; }
@@ -350,13 +358,13 @@
     .info-table input[type="number"] { width: 60px; }
     .info-table input[type="date"] { width: 140px; }
 
-    .week-row-excluded { color: var(--text-muted); font-style: italic; background: #fafafb; }
+    .week-row-excluded { color: var(--text-muted); font-style: italic; background: #f7f4ee; }
 
     /* ===== Modal 對話框 ===== */
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(20, 22, 34, 0.5);
+      background: rgba(50, 46, 40, 0.4);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -372,8 +380,8 @@
       box-shadow: var(--shadow-lg);
     }
     .modal-title {
-      font-size: 1.1em;
-      font-weight: 700;
+      font-size: 1.05em;
+      font-weight: 500;
       color: var(--text);
       margin-bottom: 10px;
       display: flex;
@@ -412,31 +420,34 @@
       justify-content: flex-end;
       gap: 10px;
     }
-    .modal-btn-cancel { background-color: #eef0f4; color: var(--text); }
-    .modal-btn-cancel:hover { background-color: #e2e5ec; }
+    .modal-btn-cancel { background-color: var(--primary-soft); color: var(--text); }
+    .modal-btn-cancel:hover { background-color: #e1dac9; }
     .modal-btn-confirm.danger { background-color: var(--danger); }
-    .modal-btn-confirm.danger:hover { background-color: #b91c1c; }
+    .modal-btn-confirm.danger:hover { background-color: #5e0013; }
 
     /* ===== 品牌抬頭 ===== */
     .brand-header {
-      margin-bottom: 18px;
-      padding: 0 2px;
+      margin-bottom: 20px;
+      padding: 0 2px 14px;
+      border-bottom: 1px solid var(--border);
     }
     .brand-header h1 {
       margin: 0;
-      font-size: 1.5em;
-      font-weight: 700;
+      font-size: 1.45em;
+      font-weight: 500;
       color: var(--text);
-      letter-spacing: 0.5px;
+      letter-spacing: 0.14em;
       display: flex;
       align-items: baseline;
       gap: 10px;
       flex-wrap: wrap;
     }
     .brand-header .brand-en {
-      font-size: 0.6em;
-      font-weight: 600;
-      color: var(--primary);
+      font-size: 0.5em;
+      font-weight: 400;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
     }
     .brand-header .brand-sub {
       margin-top: 2px;
@@ -461,7 +472,7 @@
       flex-wrap: wrap;
     }
     .week-card-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .week-card-title .name { font-weight: 700; font-size: 1.05em; }
+    .week-card-title .name { font-weight: 500; font-size: 1.05em; }
     .week-card-title .date { font-size: 0.85em; color: var(--text-muted); }
     .week-card-actions { display: flex; gap: 6px; }
     .week-card-note {
@@ -488,7 +499,7 @@
       align-items: center;
       gap: 5px;
       padding: 4px 10px;
-      border-radius: 999px;
+      border-radius: 3px;
       background: #fff;
       border: 1px solid var(--border);
       font-size: 0.85em;
@@ -509,11 +520,11 @@
     }
     .group-tab {
       padding: 7px 16px;
-      border-radius: 999px;
+      border-radius: var(--radius);
       background: var(--surface);
       color: var(--text-muted);
       border: 1px solid var(--border);
-      font-weight: 600;
+      font-weight: 500;
       font-size: 0.88em;
       cursor: pointer;
     }
@@ -545,7 +556,7 @@
       flex-wrap: wrap;
     }
     .group-card-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-    .group-card-title .name { font-weight: 700; font-size: 1.05em; }
+    .group-card-title .name { font-weight: 500; font-size: 1.05em; }
     .group-card-title .count { font-size: 0.85em; color: var(--text-muted); }
     .group-card-actions { display: flex; gap: 6px; }
     .group-member-picker {
@@ -568,6 +579,85 @@
     }
     .group-member-picker .exited-tag { color: var(--text-muted); font-size: 0.82em; }
     .group-member-picker .empty-note { color: var(--text-muted); font-size: 0.85em; }
+
+    /* ===== 區塊標題的小圓點（取代 🟢🔴）===== */
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .dot-active { background: var(--success); }
+    .dot-exited { background: var(--accent); }
+
+    /* ===== 說明列、表格小工具列 ===== */
+    .help-row { margin: 0 0 14px; }
+    .help-row .text-muted { margin-top: 8px; }
+    .table-tools { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+    .link-btn { background: transparent; color: var(--text-muted); padding: 4px 0; font-weight: 400; text-decoration: underline; text-underline-offset: 3px; }
+    .link-btn:hover { background: transparent; color: var(--accent); }
+
+    /* ===== 手機版：底部導覽列、＋按鈕、新增面板、提示 ===== */
+    body.is-mobile { padding: 14px 12px calc(84px + env(safe-area-inset-bottom)); }
+    body.is-mobile input, body.is-mobile select, body.is-mobile textarea { font-size: 16px; }
+    body.is-mobile .brand-header { margin-bottom: 14px; padding-bottom: 10px; }
+    body.is-mobile .brand-header h1 { font-size: 1.2em; }
+    body.is-mobile .page-container { padding: 18px 14px; }
+    body.is-mobile .group-tabs { flex-wrap: nowrap; overflow-x: auto; margin: 4px -12px 12px; padding: 0 12px 4px; -webkit-overflow-scrolling: touch; }
+    body.is-mobile .group-tab { flex: 0 0 auto; padding: 9px 16px; }
+    body.is-mobile .sheet-container { height: 58vh; }
+    body.is-mobile .sheet-container.exited-container { height: auto; max-height: 36vh; }
+    body.is-mobile .mobile-compact .week-cell { min-width: 0; }
+
+    .bottom-nav {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
+      display: flex; background: var(--surface); border-top: 1px solid var(--border);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .bottom-nav button {
+      flex: 1; background: transparent; color: var(--text-muted); border-radius: 0;
+      padding: 9px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font-size: 11px; font-weight: 500; letter-spacing: 0.06em;
+    }
+    .bottom-nav button:hover { background: transparent; }
+    .bottom-nav button svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+    .bottom-nav button.active { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+
+    .fab {
+      position: fixed; right: 16px; bottom: calc(68px + env(safe-area-inset-bottom)); z-index: 72;
+      width: 52px; height: 52px; border-radius: 50%; padding: 0;
+      background: var(--accent); color: #fff; font-size: 28px; font-weight: 300; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 10px rgba(61, 58, 53, 0.28);
+    }
+    .fab:hover { background: #5e0013; }
+
+    .sheet-overlay { position: fixed; inset: 0; z-index: 85; background: rgba(50, 46, 40, 0.4); display: flex; align-items: flex-end; }
+    .sheet {
+      width: 100%; background: var(--surface); border-top: 1px solid var(--border);
+      border-radius: 12px 12px 0 0; padding: 18px 18px calc(22px + env(safe-area-inset-bottom));
+    }
+    .sheet-seg { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 18px; }
+    .sheet-seg button { flex: 1; background: transparent; color: var(--text-muted); border-radius: 0; padding: 11px 0; }
+    .sheet-seg button:hover { background: var(--primary-soft); }
+    .sheet-seg button.active { background: var(--primary); color: #fff; }
+    .sheet .modal-field input, .sheet .modal-field select { width: 100%; padding: 11px 12px; }
+    .sheet .sheet-submit { width: 100%; padding: 13px 0; margin-top: 4px; font-size: 1em; }
+
+    .toast {
+      position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 88;
+      background: var(--primary-dark); color: #fff; padding: 9px 18px; border-radius: var(--radius);
+      font-size: 0.9em; letter-spacing: 0.05em; max-width: 86vw; text-align: center;
+    }
+    body:not(.is-mobile) .toast { bottom: 24px; }
+
+    /* ===== 手機版：成員卡片 ===== */
+    .member-cards { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    .member-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+    .member-card-head { display: flex; justify-content: space-between; align-items: center; cursor: pointer; padding: 2px 0 6px; }
+    .member-card-name { font-size: 1.05em; font-weight: 500; letter-spacing: 0.05em; }
+    .member-card-more { font-size: 0.82em; color: var(--text-muted); }
+    .member-card-stats { font-size: 0.85em; color: var(--text-muted); line-height: 1.8; margin-bottom: 8px; }
+    .member-card select { width: 100%; padding: 10px 12px; }
+    .member-card-actions { display: flex; gap: 8px; }
+    .member-card-actions button { flex: 1; padding: 9px 0; }
+
+    .control-panel .control-group input[type="text"]:not([style]) { width: 150px; }
   </style>
 </head>
 <body>
@@ -592,7 +682,7 @@
 
     <!-- ============ 頁面一：主要試算表 ============ -->
     <div v-if="currentPage === 'main'">
-      <div class="control-panel">
+      <div class="control-panel" v-if="!isMobile">
         <div class="control-group">
           <strong>新增週次：</strong>
           <input type="text" v-model="newWeekName" placeholder="例: 語音練習" style="width:120px;" @keyup.enter="addWeek">
@@ -608,10 +698,13 @@
           </select>
           <button @click="addMember">加入</button>
         </div>
-        <button class="info-btn" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
-        <button class="info-btn" @click="currentPage = 'weekList'">📅 週次練習表</button>
-        <button class="info-btn" @click="currentPage = 'groupManage'">👥 群組管理</button>
-        <button class="help-btn" @click="showHelp = !showHelp">{{ showHelp ? '收起說明' : '❓ 使用說明' }}</button>
+        <button class="info-btn" @click="currentPage = 'memberInfo'">成員資訊</button>
+        <button class="info-btn" @click="currentPage = 'weekList'">週次練習表</button>
+        <button class="info-btn" @click="currentPage = 'groupManage'">群組管理</button>
+      </div>
+
+      <div class="help-row">
+  <button class="help-btn" @click="showHelp = !showHelp">{{ showHelp ? '收起說明' : '使用說明' }}</button>
         <span class="text-muted" v-if="showHelp">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。黃牌就算之後被拿掉，紀錄仍會保留並持續累積，<strong>累積達 5 張黃牌會自動視同紅牌並觸發退群確認</strong>；退群後重新加入群組則會重新累積。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
       </div>
 
@@ -622,7 +715,10 @@
         </button>
       </div>
 
-      <h3 class="section-title">🟢 活躍成員（{{ filteredActiveMembers.length }} 人）</h3>
+      <h3 class="section-title"><span class="dot dot-active"></span>活躍成員（{{ filteredActiveMembers.length }} 人）</h3>
+      <div class="table-tools" v-if="isMobile && weeks.length > 2">
+        <button class="link-btn" @click="toggleAllWeeks">{{ showAllWeeks ? '只看最近兩週' : '顯示全部週次' }}</button>
+      </div>
       <div class="sheet-container" ref="activeSheetEl" :style="activeTableHeight ? { height: activeTableHeight } : {}">
         <table :class="{ 'mobile-compact': isMobile }">
           <thead>
@@ -630,7 +726,7 @@
               <th v-if="!isMobile" class="frozen-head-1"><div class="corner-pin pin-1">#</div></th>
               <th class="frozen-head-2"><div class="corner-pin pin-2">姓名</div></th>
               <th class="frozen-head-3"><div class="corner-pin pin-3">{{ isMobile ? '🙋' : '自我介紹' }}</div></th>
-              <th v-for="week in weeks" :key="week.id" class="week-header-cell" :class="{'latest-week-col': week.id === latestWeekId}">
+              <th v-for="week in visibleWeeks" :key="week.id" class="week-header-cell" :class="{'latest-week-col': week.id === latestWeekId}">
                 <span class="week-name">{{ week.name }}</span>
                 <span class="week-date" v-if="week.date">{{ week.date }}</span>
                 <span class="week-actions">
@@ -647,7 +743,7 @@
               <td class="frozen-3 cell-clickable" @click="toggleIntro(member)">
                 {{ member.intro ? '👍' : '' }}
               </td>
-              <td v-for="week in weeks" :key="week.id"
+              <td v-for="week in visibleWeeks" :key="week.id"
                   class="cell-clickable week-cell"
                   :class="{'latest-week-col': week.id === latestWeekId}"
                   @click="incrementCount(member, week.id)">
@@ -659,13 +755,13 @@
               </td>
             </tr>
             <tr v-if="filteredActiveMembers.length === 0">
-              <td :colspan="weeks.length + (isMobile ? 2 : 3)" style="color: var(--text-muted); padding: 20px;">{{ currentGroupFilter ? '這個群組目前沒有活躍成員' : '目前沒有活躍成員' }}</td>
+              <td :colspan="visibleWeeks.length + (isMobile ? 2 : 3)" style="color: var(--text-muted); padding: 20px;">{{ currentGroupFilter ? '這個群組目前沒有活躍成員' : '目前沒有活躍成員' }}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <h3 class="section-title">🔴 退出成員（{{ filteredExitedMembers.length }} 人）</h3>
+      <h3 class="section-title"><span class="dot dot-exited"></span>退出成員（{{ filteredExitedMembers.length }} 人）</h3>
       <div class="sheet-container exited-container">
         <table class="exited-table">
           <thead>
@@ -708,6 +804,7 @@
       </div>
 
       <div class="profile-grid">
+        <label>姓名</label><input type="text" v-model="selectedMember.name" placeholder="姓名">
         <label>國籍</label><input type="text" v-model="selectedMember.nationality" placeholder="例: 西班牙">
         <label>年齡</label><input type="number" v-model="selectedMember.age" placeholder="例: 25">
         <label>入群時間</label><input type="date" v-model="selectedMember.joinDate">
@@ -752,11 +849,11 @@
 
     <!-- ============ 頁面三：成員資訊總覽 ============ -->
     <div v-if="currentPage === 'memberInfo'" class="page-container">
-      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <button class="secondary" v-if="!isMobile" @click="currentPage = 'main'">← 返回總表</button>
       <h2>成員資訊總覽</h2>
 
-      <h3 class="section-title">🟢 活躍成員（{{ activeMembers.length }} 人）</h3>
-      <div class="info-table-wrap">
+      <h3 class="section-title"><span class="dot dot-active"></span>活躍成員（{{ activeMembers.length }} 人）</h3>
+      <div class="info-table-wrap" v-if="!isMobile">
         <table class="info-table">
           <thead>
             <tr>
@@ -789,8 +886,22 @@
         </table>
       </div>
 
-      <h3 class="section-title">🔴 退出成員（{{ exitedMembers.length }} 人）</h3>
-      <div class="info-table-wrap">
+      <div class="member-cards" v-if="isMobile">
+        <div class="member-card" v-for="m in activeMemberInfoList" :key="m.member.id">
+          <div class="member-card-head" @click="goToMemberDetail(m.member.id)">
+            <span class="member-card-name">{{ m.member.name }}</span>
+            <span class="member-card-more">詳細 ›</span>
+          </div>
+          <div class="member-card-stats">出席 {{ m.stats.attended }}/{{ m.stats.eligibleCount }}（{{ m.stats.rate }}%）　語音 {{ m.stats.total }} 則　🟨 {{ m.stats.yellow }}　🟥 {{ m.stats.red }}</div>
+          <select v-model="m.member.groupId">
+            <option value="">未分組</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          </select>
+        </div>
+      </div>
+
+      <h3 class="section-title"><span class="dot dot-exited"></span>退出成員（{{ exitedMembers.length }} 人）</h3>
+      <div class="info-table-wrap" v-if="!isMobile">
         <table class="info-table">
           <thead>
             <tr>
@@ -829,11 +940,31 @@
           </tbody>
         </table>
       </div>
+
+      <div class="member-cards" v-if="isMobile">
+        <div class="member-card" v-for="m in exitedMemberInfoList" :key="m.member.id">
+          <div class="member-card-head" @click="goToMemberDetail(m.member.id)">
+            <span class="member-card-name">{{ m.member.name }}</span>
+            <span class="member-card-more">詳細 ›</span>
+          </div>
+          <div class="member-card-stats">
+            退群 {{ m.member.exitDate || '未記錄' }}　{{ m.member.exitReason || '未記錄' }}<br>
+            <span v-if="canRejoin(m.member) === true" class="badge badge-success">可重新加入</span>
+            <span v-else-if="canRejoin(m.member) === false" class="badge badge-warning">還需等 {{ daysUntilRejoin(m.member) }} 天</span>
+          </div>
+          <div class="member-card-actions">
+            <button class="small secondary" @click="restoreMember(m.member)">恢復</button>
+            <button class="small danger" @click="deleteMember(m.member)">刪除</button>
+          </div>
+        </div>
+        <div v-if="exitedMembers.length === 0" class="text-muted">目前沒有退出成員</div>
+      </div>
+
     </div>
 
     <!-- ============ 頁面四：週次練習表 ============ -->
     <div v-if="currentPage === 'weekList'" class="page-container">
-      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <button class="secondary" v-if="!isMobile" @click="currentPage = 'main'">← 返回總表</button>
       <h2>週次練習表</h2>
       <span class="text-muted">在這裡新增、修改、刪除練習週次，並查看每一週有誰參加。</span>
 
@@ -873,7 +1004,7 @@
 
     <!-- ============ 頁面五：群組管理 ============ -->
     <div v-if="currentPage === 'groupManage'" class="page-container">
-      <button class="secondary" @click="currentPage = 'main'">← 返回總表</button>
+      <button class="secondary" v-if="!isMobile" @click="currentPage = 'main'">← 返回總表</button>
       <h2>群組管理</h2>
       <span class="text-muted">新增、修改、刪除群組，並選擇成員加入。每位成員只能屬於一個群組，勾選某個群組會自動把該成員從原本的群組移出。</span>
 
@@ -909,6 +1040,58 @@
         <div v-if="groups.length === 0" class="text-muted" style="margin-top: 14px;">目前還沒有任何群組，請先新增。</div>
       </div>
     </div>
+
+    <!-- ============ 手機版：底部導覽列 ＋ 新增按鈕 ============ -->
+    <nav class="bottom-nav" v-if="isMobile">
+      <button :class="{ active: currentPage === 'main' }" @click="currentPage = 'main'">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 10h16M10 4v16"/></svg>總表
+      </button>
+      <button :class="{ active: currentPage === 'memberInfo' || currentPage === 'memberDetail' }" @click="currentPage = 'memberInfo'">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.5"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/></svg>成員
+      </button>
+      <button :class="{ active: currentPage === 'weekList' }" @click="currentPage = 'weekList'">
+        <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="1"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>週次
+      </button>
+      <button :class="{ active: currentPage === 'groupManage' }" @click="currentPage = 'groupManage'">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2.5"/><path d="M3 19c0-3.5 2.5-5 6-5s6 1.5 6 5M15 15c3 0 6 1 6 4"/></svg>群組
+      </button>
+    </nav>
+    <button class="fab" v-if="isMobile && ['main', 'memberInfo', 'weekList'].includes(currentPage)" @click="openAddSheet" aria-label="新增">＋</button>
+
+    <div v-if="addSheet.visible" class="sheet-overlay" @click.self="closeAddSheet">
+      <div class="sheet">
+        <div class="sheet-seg">
+          <button :class="{ active: addSheet.kind === 'member' }" @click="addSheet.kind = 'member'">新增人員</button>
+          <button :class="{ active: addSheet.kind === 'week' }" @click="addSheet.kind = 'week'">新增週次</button>
+        </div>
+        <template v-if="addSheet.kind === 'member'">
+          <div class="modal-field">
+            <label>姓名</label>
+            <input type="text" v-model="newMember" placeholder="輸入姓名" ref="sheetMemberEl" @keyup.enter="submitAddSheet">
+          </div>
+          <div class="modal-field">
+            <label>群組</label>
+            <select v-model="newMemberGroup">
+              <option value="">未分組</option>
+              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+            </select>
+          </div>
+        </template>
+        <template v-else>
+          <div class="modal-field">
+            <label>週次名稱</label>
+            <input type="text" v-model="newWeekName" placeholder="例: 語音練習" ref="sheetWeekEl" @keyup.enter="submitAddSheet">
+          </div>
+          <div class="modal-field">
+            <label>日期</label>
+            <input type="date" v-model="newWeekDate">
+          </div>
+        </template>
+        <button class="sheet-submit" @click="submitAddSheet">加入</button>
+      </div>
+    </div>
+
+    <div class="toast" v-if="toast.visible">{{ toast.text }}</div>
 
     <!-- ============ Modal：通用確認 / 輸入框 ============ -->
     <div v-if="modal.visible" class="modal-overlay" @click.self="modalCancelClick" @keydown.esc="modalCancelClick" tabindex="-1">
@@ -1114,7 +1297,7 @@
     // ============================================================
 
     // 群組配色盤：依群組在 groups 陣列中的順序循環使用
-    const GROUP_COLOR_PALETTE = ['#ffe0e0', '#dbeafe', '#dcfce7', '#fef3c7', '#ede9fe', '#ffe4d6', '#e0f2fe', '#fce7f3'];
+    const GROUP_COLOR_PALETTE = ['#eadcd3', '#dfe5dc', '#e9e2cc', '#dde3e6', '#e6dfe3', '#e3e6d8', '#e8dcdc', '#e2dccf'];
 
     function todayStr() {
       const d = new Date();
@@ -1221,6 +1404,7 @@
         const isMobile = ref(false);
         function updateIsMobile() {
           isMobile.value = window.innerWidth <= 640;
+          document.body.classList.toggle('is-mobile', isMobile.value);
         }
 
         // 桌面版「活躍成員」表格固定高度：精算成「表頭高度 + 10 列資料」，
@@ -1270,6 +1454,42 @@
         const newMemberGroup = ref('');
         watch(currentGroupFilter, (v) => { newMemberGroup.value = v; });
         const showHelp = ref(false);
+
+        // 手機版總表預設只顯示最新兩週，可切換成全部週次（電腦版一律顯示全部）
+        const showAllWeeks = ref(false);
+        const visibleWeeks = computed(() =>
+          isMobile.value && !showAllWeeks.value ? weeks.value.slice(-2) : weeks.value
+        );
+        function toggleAllWeeks() {
+          showAllWeeks.value = !showAllWeeks.value;
+          scrollToLatestWeek();
+        }
+
+        // 小提示（加入成功等）
+        const toast = ref({ visible: false, text: '' });
+        let toastTimer = null;
+        function showToast(text) {
+          toast.value = { visible: true, text };
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => { toast.value.visible = false; }, 2200);
+        }
+
+        // 手機版「＋」新增面板
+        const addSheet = ref({ visible: false, kind: 'member' });
+        const sheetMemberEl = ref(null);
+        const sheetWeekEl = ref(null);
+        function openAddSheet() {
+          addSheet.value = { visible: true, kind: currentPage.value === 'weekList' ? 'week' : 'member' };
+          nextTick(() => {
+            const el = addSheet.value.kind === 'week' ? sheetWeekEl.value : sheetMemberEl.value;
+            if (el) el.focus();
+          });
+        }
+        function closeAddSheet() { addSheet.value.visible = false; }
+        async function submitAddSheet() {
+          const added = addSheet.value.kind === 'week' ? addWeek() : await addMember();
+          if (added) closeAddSheet();
+        }
         const expandedGroupId = ref(null);
 
         // 週次練習表頁面：由新到舊顯示（不影響主表格 weeks 本身的順序）
@@ -1576,10 +1796,13 @@
         };
 
         const addWeek = () => {
-          if (!newWeekName.value.trim()) return;
-          weeks.value.push({ id: 'w_' + Date.now(), name: newWeekName.value.trim(), date: newWeekDate.value || '', note: '' });
+          const name = newWeekName.value.trim();
+          if (!name) return false;
+          weeks.value.push({ id: 'w_' + Date.now(), name, date: newWeekDate.value || '', note: '' });
           newWeekName.value = '';
           newWeekDate.value = todayStr();
+          showToast(`已新增週次「${name}」`);
+          return true;
         };
 
         const deleteWeek = async (week) => {
@@ -1595,7 +1818,7 @@
 
         const addMember = async () => {
           const name = newMember.value.trim();
-          if (!name) return;
+          if (!name) return false;
           // 重名提醒（不分大小寫，活躍和已退出的都比對）
           const same = members.value.find(m => (m.name || '').trim().toLowerCase() === name.toLowerCase());
           if (same) {
@@ -1605,7 +1828,7 @@
                 ? `退出名單裡已經有「${same.name}」。\n如果是同一個人要回來，建議到退出名單按「恢復」，這樣才不會有兩筆紀錄。\n仍要新增一位新的嗎？`
                 : `活躍名單裡已經有「${same.name}」。\n仍要新增一位同名的成員嗎？`
             });
-            if (!ok) return;
+            if (!ok) return false;
           }
           const groupId = groups.value.some(g => g.id === newMemberGroup.value) ? newMemberGroup.value : '';
           members.value.push({
@@ -1614,6 +1837,8 @@
             groupId
           });
           newMember.value = '';
+          showToast(`已加入「${name}」`);
+          return true;
         };
 
         const toggleIntro = (member) => { member.intro = !member.intro; };
@@ -1723,6 +1948,8 @@
           weeks, members, newWeekName, newWeekDate, newMember,
           activeMembers, activeMembersPlain, exitedMembers,
           newMemberGroup, showHelp, loadState: cloudLoadState, retryLoad,
+          showAllWeeks, visibleWeeks, toggleAllWeeks, toast,
+          addSheet, sheetMemberEl, sheetWeekEl, openAddSheet, closeAddSheet, submitAddSheet,
           addWeek, addMember, toggleIntro, restoreMember, deleteMember,
           deleteWeek, openWeekEdit, confirmWeekEdit, cancelWeekEdit,
           weekEditModal, weekEditNameEl,
