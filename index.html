@@ -1402,7 +1402,18 @@
           }
         });
 
-        const activeMembers = computed(() => members.value.filter(m => m.status === 'active'));
+        // 活躍成員依群組順序排列（同群組的排在一起，沒群組的排最後；同群組內維持加入先後）
+        const activeMembers = computed(() => {
+          const order = (m) => {
+            const idx = groups.value.findIndex(g => g.id === m.groupId);
+            return idx === -1 ? groups.value.length : idx;
+          };
+          return members.value
+            .map((m, i) => ({ m, i }))
+            .filter(x => x.m.status === 'active')
+            .sort((a, b) => order(a.m) - order(b.m) || a.i - b.i)
+            .map(x => x.m);
+        });
         const exitedMembers = computed(() => members.value.filter(m => m.status === 'exited'));
 
         // 主頁群組分頁篩選：currentGroupFilter 為空字串時顯示全體
@@ -1491,7 +1502,8 @@
           if (!newMember.value.trim()) return;
           members.value.push({
             id: 'm_' + Date.now(), name: newMember.value.trim(), status: 'active', intro: false,
-            nationality: '', age: '', joinDate: todayStr(), exitDate: '', exitReason: '', records: {}
+            nationality: '', age: '', joinDate: todayStr(), exitDate: '', exitReason: '', records: {},
+            groupId: currentGroupFilter.value || ''
           });
           newMember.value = '';
         };
