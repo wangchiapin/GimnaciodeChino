@@ -297,6 +297,17 @@
     .sync-indicator.sync-synced { background: var(--success-soft); color: #15803d; }
     .sync-indicator.sync-error { background: var(--danger-soft); color: var(--danger); cursor: help; }
 
+    /* 雲端資料沒讀到時：鎖住畫面並顯示提示，避免舊資料覆蓋雲端 */
+    .lock-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(255,255,255,0.6); }
+    .load-fail-banner {
+      position: fixed; left: 10px; right: 10px; top: 10px; z-index: 95;
+      padding: 12px 14px; border-radius: 12px; line-height: 1.6;
+      background: var(--danger-soft); color: var(--danger); font-size: 0.9em;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+    .load-fail-banner button { margin-left: 8px; }
+    .help-btn { background: var(--text-muted); }
+
     /* ===== 個別頁面（成員統計 / 成員資訊）===== */
     .page-container {
       background: var(--surface);
@@ -568,6 +579,12 @@
       <span v-else-if="syncStatus === 'error'">⚠️ 同步失敗，點我看原因</span>
     </div>
 
+    <div v-if="loadState === 'failed'" class="lock-overlay"></div>
+    <div v-if="loadState === 'failed'" class="load-fail-banner">
+      ⚠️ 雲端資料沒有讀取成功。為了避免舊資料蓋掉雲端的新資料，已暫停編輯與存檔。
+      <button @click="retryLoad">重新讀取</button>
+    </div>
+
     <div class="brand-header">
       <h1>中文健身房 <span class="brand-en">Gimnacio de Chino</span></h1>
       <div class="brand-sub">by @cadadiaunosminutos</div>
@@ -585,12 +602,17 @@
         <div class="control-group">
           <strong>新增人員：</strong>
           <input type="text" v-model="newMember" placeholder="輸入姓名" @keyup.enter="addMember">
+          <select v-model="newMemberGroup" title="新成員加入的群組">
+            <option value="">未分組</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+          </select>
           <button @click="addMember">加入</button>
         </div>
         <button class="info-btn" @click="currentPage = 'memberInfo'">📋 成員資訊</button>
         <button class="info-btn" @click="currentPage = 'weekList'">📅 週次練習表</button>
         <button class="info-btn" @click="currentPage = 'groupManage'">👥 群組管理</button>
-        <span class="text-muted">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。黃牌就算之後被拿掉，紀錄仍會保留並持續累積，<strong>累積達 5 張黃牌會自動視同紅牌並觸發退群確認</strong>；退群後重新加入群組則會重新累積。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
+        <button class="help-btn" @click="showHelp = !showHelp">{{ showHelp ? '收起說明' : '❓ 使用說明' }}</button>
+        <span class="text-muted" v-if="showHelp">點擊格子上半部依序切換讚數 <strong>👍 ➔ 👍👍 ➔ 👍👍👍 ➔ 空白</strong>；格子下方的小方塊獨立切換 <strong>🟨黃牌 ➔ 🟥紅牌 ➔ 空白</strong>，不會影響已記錄的讚數，方便保留「發了幾則但沒達標」的完整歷史。點 🟥 會觸發退群確認。黃牌就算之後被拿掉，紀錄仍會保留並持續累積，<strong>累積達 5 張黃牌會自動視同紅牌並觸發退群確認</strong>；退群後重新加入群組則會重新累積。點成員姓名可看個人統計。週次表頭 ✏️ 改名/改日期/備註、🗑 刪除。活躍與退出成員各自獨立捲動。</span>
       </div>
 
       <div class="group-tabs">
@@ -708,13 +730,21 @@
       <h3 class="section-title">每週紀錄明細</h3>
       <table class="info-table">
         <thead>
-          <tr><th>週次</th><th>日期</th><th>紀錄</th></tr>
+          <tr><th>週次</th><th>日期</th><th>紀錄</th><th>累積黃牌</th></tr>
         </thead>
         <tbody>
           <tr v-for="week in weeks" :key="week.id" :class="{'week-row-excluded': isBeforeJoin(week, selectedMember)}">
             <td>{{ week.name }}</td>
             <td>{{ week.date || '—' }}</td>
             <td>{{ isBeforeJoin(week, selectedMember) ? '（尚未加入群組）' : recordSummary(selectedMember, week.id) }}</td>
+            <td>
+              <template v-if="!isBeforeJoin(week, selectedMember) && getRecord(selectedMember, week.id).everYellow && !getRecord(selectedMember, week.id).flag">
+                <span>{{ getRecord(selectedMember, week.id).yellowIgnored ? '已排除（誤點）' : '🟨 已拿掉，仍計入' }}</span>
+                <button class="small secondary" style="margin-left:6px" @click="toggleYellowIgnored(selectedMember, week.id)">{{ getRecord(selectedMember, week.id).yellowIgnored ? '改回計入' : '誤點，不計入' }}</button>
+              </template>
+              <span v-else-if="getRecord(selectedMember, week.id).flag === 'yellow'">目前黃牌中</span>
+              <span v-else>—</span>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -869,11 +899,11 @@
             </div>
           </div>
           <div class="group-member-picker" v-if="expandedGroupId === group.id">
-            <label v-for="m in activeMembers" :key="m.id">
+            <label v-for="m in activeMembersPlain" :key="m.id">
               <input type="checkbox" :checked="m.groupId === group.id" @change="toggleMemberGroup(m, group.id)">
               {{ m.name }}
             </label>
-            <span v-if="activeMembers.length === 0" class="empty-note">目前還沒有任何活躍成員</span>
+            <span v-if="activeMembersPlain.length === 0" class="empty-note">目前還沒有任何活躍成員</span>
           </div>
         </div>
         <div v-if="groups.length === 0" class="text-muted" style="margin-top: 14px;">目前還沒有任何群組，請先新增。</div>
@@ -953,6 +983,9 @@
     // 'idle' 還沒動作過／'saving' 正在寫入／'synced' 已同步／'error' 上次寫入失敗
     const syncStatus = ref('idle');
     const lastSyncError = ref('');
+    // 雲端資料讀取狀態：'loading' 讀取中／'ok' 讀取成功（可以存檔）／'failed' 讀取失敗（暫停編輯與存檔）
+    // 沒讀到雲端就存檔，會用裝置裡的舊資料把雲端的新資料整份蓋掉，所以必須是 'ok' 才允許存檔。
+    const cloudLoadState = ref(FIREBASE_ENABLED ? 'loading' : 'ok');
     // 用「單一進行中 promise」避免競爭條件：
     // 舊版在 initializeApp() 之後就立刻把 firebaseDb 設成非 null，
     // 但這時候匿名登入 (signInAnonymously) 可能還沒完成。如果短時間內
@@ -1032,6 +1065,29 @@
     }
     async function saveGroupsToFirebase(groupsData) {
       return saveDocToFirebase('groups', groupsData);
+    }
+
+    // 延遲存檔：連續操作（例如連點格子）只在停手約 1 秒後存一次，減少寫入次數。
+    // 切走分頁或關閉頁面時會立刻把還沒存的先送出（flushPendingSaves）。
+    const SAVE_DELAY_MS = 1000;
+    const pendingSaves = {}; // docName -> { timer, getData }
+    function runPendingSave(docName) {
+      const p = pendingSaves[docName];
+      if (!p) return;
+      clearTimeout(p.timer);
+      delete pendingSaves[docName];
+      if (cloudLoadState.value !== 'ok') return;
+      saveDocToFirebase(docName, p.getData());
+    }
+    function scheduleCloudSave(docName, getData) {
+      if (!FIREBASE_ENABLED) return;
+      if (cloudLoadState.value !== 'ok') return; // 雲端還沒讀成功，不存檔
+      if (pendingSaves[docName]) clearTimeout(pendingSaves[docName].timer);
+      syncStatus.value = 'saving';
+      pendingSaves[docName] = { getData, timer: setTimeout(() => runPendingSave(docName), SAVE_DELAY_MS) };
+    }
+    function flushPendingSaves() {
+      Object.keys(pendingSaves).forEach(runPendingSave);
     }
     async function loadFromFirebase() {
       const db = await ensureFirebase();
@@ -1191,18 +1247,18 @@
 
         watch(weeks, (newVal) => {
           localStorage.setItem('sheetWeeks', JSON.stringify(newVal));
-          if (FIREBASE_ENABLED) saveWeeksToFirebase(newVal);
+          scheduleCloudSave('weeks', () => weeks.value);
           updateActiveTableHeight(); // 週次增減不會改變表頭高度（nowrap），但保險起見還是重新量一次
         }, { deep: true });
 
         watch(members, (newVal) => {
           localStorage.setItem('sheetMembers', JSON.stringify(newVal));
-          if (FIREBASE_ENABLED) saveMembersToFirebase(newVal);
+          scheduleCloudSave('members', () => members.value);
         }, { deep: true });
 
         watch(groups, (newVal) => {
           localStorage.setItem('sheetGroups', JSON.stringify(newVal));
-          if (FIREBASE_ENABLED) saveGroupsToFirebase(newVal);
+          scheduleCloudSave('groups', () => groups.value);
         }, { deep: true });
 
         const newWeekName = ref('');
@@ -1210,6 +1266,10 @@
         const newMember = ref('');
         const newGroupName = ref('');
         const currentGroupFilter = ref('');
+        // 新增人員時要加入的群組；切換主頁群組分頁時會自動跟著換，也可以自己改
+        const newMemberGroup = ref('');
+        watch(currentGroupFilter, (v) => { newMemberGroup.value = v; });
+        const showHelp = ref(false);
         const expandedGroupId = ref(null);
 
         // 週次練習表頁面：由新到舊顯示（不影響主表格 weeks 本身的順序）
@@ -1251,7 +1311,7 @@
         function cumulativeYellowCount(member) {
           return getEligibleWeeks(member).reduce((sum, w) => {
             const r = member.records[w.id];
-            return sum + (r && r.everYellow ? 1 : 0);
+            return sum + (r && r.everYellow && !r.yellowIgnored ? 1 : 0);
           }, 0);
         }
 
@@ -1263,6 +1323,7 @@
           if (!rec.flag) {
             rec.flag = 'yellow';
             rec.everYellow = true;
+            rec.yellowIgnored = false; // 重新標記黃牌就是一次新的黃牌，不再是「誤點排除」
             // 就算之前的黃牌陸續被拿掉，這張仍然會被算進歷史累積裡；
             // 累積達 5 張時，直接視同紅牌並觸發退群流程
             if (cumulativeYellowCount(member) >= 5) {
@@ -1275,6 +1336,13 @@
           } else {
             rec.flag = null;
           }
+        }
+
+        // 個人頁：把某一週「已拿掉但仍計入累積」的黃牌標成誤點（不計入），或改回計入
+        function toggleYellowIgnored(member, weekId) {
+          const rec = member.records[weekId];
+          if (!rec || !rec.everYellow || rec.flag) return;
+          rec.yellowIgnored = !rec.yellowIgnored;
         }
 
         function participantsForWeek(week) {
@@ -1370,7 +1438,25 @@
           const active = document.activeElement;
           if (active && ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName)) return;
           const cloudData = await loadFromFirebase();
-          applyCloudData(cloudData);
+          if (cloudData) {
+            applyCloudData(cloudData);
+            cloudLoadState.value = 'ok';
+          } else {
+            // 沒讀到最新資料，畫面上的可能是舊的，先鎖住避免之後存檔蓋掉雲端
+            cloudLoadState.value = 'failed';
+          }
+        }
+
+        // 「重新讀取」按鈕：讀成功就解除鎖定
+        async function retryLoad() {
+          cloudLoadState.value = 'loading';
+          const cloudData = await loadFromFirebase();
+          if (cloudData) {
+            applyCloudData(cloudData);
+            cloudLoadState.value = 'ok';
+          } else {
+            cloudLoadState.value = 'failed';
+          }
         }
 
         // 分頁被切走超過 15 秒才重新整理，避免只是快速切一下也跟著重抓
@@ -1378,6 +1464,7 @@
         function handleVisibilityChange() {
           if (document.visibilityState === 'hidden') {
             lastHiddenAt = Date.now();
+            flushPendingSaves(); // 切走前先把還沒存的送出
           } else if (document.visibilityState === 'visible') {
             const hiddenForMs = lastHiddenAt ? (Date.now() - lastHiddenAt) : 0;
             if (hiddenForMs > 15000) refreshFromFirebase();
@@ -1390,15 +1477,20 @@
           updateActiveTableHeight();
           window.addEventListener('resize', () => { updateIsMobile(); updateActiveTableHeight(); });
           document.addEventListener('visibilitychange', handleVisibilityChange);
+          window.addEventListener('pagehide', flushPendingSaves);
           if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(updateActiveTableHeight); // 字型載入完成後高度可能會變，重新量一次
           }
           if (!FIREBASE_ENABLED) return;
           console.log('正在從 Firebase 載入最新資料...');
           const cloudData = await loadFromFirebase();
-          if (applyCloudData(cloudData)) {
+          if (cloudData) {
+            cloudLoadState.value = 'ok';
+            applyCloudData(cloudData);
             scrollToLatestWeek();
             console.log('資料同步完成！');
+          } else {
+            cloudLoadState.value = 'failed';
           }
         });
 
@@ -1414,6 +1506,9 @@
             .sort((a, b) => order(a.m) - order(b.m) || a.i - b.i)
             .map(x => x.m);
         });
+        // 活躍成員（維持加入先後，不依群組排序）：成員資訊頁和群組管理頁用，
+        // 這兩頁會直接改群組，用固定順序才不會改一下那一列就跳走
+        const activeMembersPlain = computed(() => members.value.filter(m => m.status === 'active'));
         const exitedMembers = computed(() => members.value.filter(m => m.status === 'exited'));
 
         // 主頁群組分頁篩選：currentGroupFilter 為空字串時顯示全體
@@ -1453,7 +1548,7 @@
         const selectedMemberStats = computed(() =>
           selectedMember.value ? computeStats(selectedMember.value) : { total: 0, yellow: 0, red: 0, attended: 0, rate: 0, eligibleCount: 0, cumulativeYellow: 0 }
         );
-        const activeMemberInfoList = computed(() => activeMembers.value.map(m => ({ member: m, stats: computeStats(m) })));
+        const activeMemberInfoList = computed(() => activeMembersPlain.value.map(m => ({ member: m, stats: computeStats(m) })));
         const exitedMemberInfoList = computed(() => exitedMembers.value.map(m => ({ member: m, stats: computeStats(m) })));
 
         // ===== 退群滿一個月才能重新加入 =====
@@ -1498,12 +1593,25 @@
           }
         };
 
-        const addMember = () => {
-          if (!newMember.value.trim()) return;
+        const addMember = async () => {
+          const name = newMember.value.trim();
+          if (!name) return;
+          // 重名提醒（不分大小寫，活躍和已退出的都比對）
+          const same = members.value.find(m => (m.name || '').trim().toLowerCase() === name.toLowerCase());
+          if (same) {
+            const ok = await showConfirm({
+              title: '已有同名成員', confirmText: '仍要新增',
+              message: same.status === 'exited'
+                ? `退出名單裡已經有「${same.name}」。\n如果是同一個人要回來，建議到退出名單按「恢復」，這樣才不會有兩筆紀錄。\n仍要新增一位新的嗎？`
+                : `活躍名單裡已經有「${same.name}」。\n仍要新增一位同名的成員嗎？`
+            });
+            if (!ok) return;
+          }
+          const groupId = groups.value.some(g => g.id === newMemberGroup.value) ? newMemberGroup.value : '';
           members.value.push({
-            id: 'm_' + Date.now(), name: newMember.value.trim(), status: 'active', intro: false,
+            id: 'm_' + Date.now(), name, status: 'active', intro: false,
             nationality: '', age: '', joinDate: todayStr(), exitDate: '', exitReason: '', records: {},
-            groupId: currentGroupFilter.value || ''
+            groupId
           });
           newMember.value = '';
         };
@@ -1597,6 +1705,7 @@
             groups.value = groups.value.filter(g => g.id !== group.id);
             members.value.forEach(m => { if (m.groupId === group.id) m.groupId = ''; });
             if (currentGroupFilter.value === group.id) currentGroupFilter.value = '';
+            if (newMemberGroup.value === group.id) newMemberGroup.value = '';
             if (expandedGroupId.value === group.id) expandedGroupId.value = null;
           }
         };
@@ -1612,7 +1721,8 @@
 
         return {
           weeks, members, newWeekName, newWeekDate, newMember,
-          activeMembers, exitedMembers,
+          activeMembers, activeMembersPlain, exitedMembers,
+          newMemberGroup, showHelp, loadState: cloudLoadState, retryLoad,
           addWeek, addMember, toggleIntro, restoreMember, deleteMember,
           deleteWeek, openWeekEdit, confirmWeekEdit, cancelWeekEdit,
           weekEditModal, weekEditNameEl,
@@ -1622,7 +1732,7 @@
           modal, modalInputEl, modalConfirmClick, modalCancelClick,
           weeksNewestFirst, participantsForWeek, activeSheetEl, isMobile, latestWeekId, activeTableHeight,
           syncStatus, lastSyncError,
-          getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag,
+          getRecord, thumbsFor, flagEmoji, recordSummary, incrementCount, cycleFlag, toggleYellowIgnored,
           groups, newGroupName, currentGroupFilter, expandedGroupId,
           filteredActiveMembers, filteredExitedMembers, groupMemberCount,
           addGroup, renameGroup, deleteGroup, toggleGroupExpand, toggleMemberGroup, groupColor
