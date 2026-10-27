@@ -389,6 +389,13 @@
       gap: 8px;
     }
     .modal-title.danger { color: var(--danger); }
+    /* 進入頁面的「群組建立多久了」懸浮視窗 */
+    .group-age-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+    .group-age-item { background: var(--primary-soft); border-radius: var(--radius-sm); padding: 12px 14px; }
+    .group-age-name { font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .group-age-since { font-size: 0.82em; color: var(--text-muted); margin-bottom: 4px; }
+    .group-age-days { color: var(--text); line-height: 1.5; }
+    .group-age-days strong { font-size: 1.25em; }
     .modal-message {
       white-space: pre-line;
       color: var(--text-muted);
@@ -1093,6 +1100,24 @@
 
     <div class="toast" v-if="toast.visible">{{ toast.text }}</div>
 
+    <!-- ============ 進入頁面時的懸浮視窗：群組建立多久了 ============ -->
+    <div v-if="groupAgePopup.visible" class="modal-overlay" @click.self="closeGroupAgePopup" @keydown.esc="closeGroupAgePopup" tabindex="-1">
+      <div class="modal-box group-age-box">
+        <div class="modal-title">📅 群組建立多久了</div>
+        <div class="group-age-list">
+          <div class="group-age-item" v-for="g in groupAgeList" :key="g.key">
+            <div class="group-age-name">{{ g.name }}</div>
+            <div class="group-age-since">建立於 {{ g.sinceText }}</div>
+            <div class="group-age-days" v-if="g.started">已經 <strong>{{ g.days }}</strong> 天<span v-if="g.months > 0">（{{ g.months }} 個月<span v-if="g.restDays > 0"> 又 {{ g.restDays }} 天</span>）</span></div>
+            <div class="group-age-days" v-else>還沒開始（再 {{ -g.days }} 天）</div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="modal-btn-confirm" @click="closeGroupAgePopup">知道了</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ Modal：通用確認 / 輸入框 ============ -->
     <div v-if="modal.visible" class="modal-overlay" @click.self="modalCancelClick" @keydown.esc="modalCancelClick" tabindex="-1">
       <div class="modal-box">
@@ -1338,8 +1363,42 @@
       return null; // 空字串或無法辨識的舊值 -> 視為沒有紀錄
     }
 
+    // ============================================================
+    // 群組建立日（進入頁面時的懸浮視窗用）
+    // 之後要改名稱、改日期、或新增第三個群組，只要改這裡。日期格式：YYYY-MM-DD
+    // ============================================================
+    const GROUP_ANCHORS = [
+      { key: 'group1', name: '群組 1', since: '2026-02-27' },
+      { key: 'group2', name: '群組 2', since: '2026-09-09' }
+    ];
+
+    // 算出「從建立日到今天」過了幾天、幾個月又幾天（用裝置所在的本地日期）
+    function describeGroupAge(sinceIso, now = new Date()) {
+      const [y, m, d] = sinceIso.split('-').map(Number);
+      const start = new Date(y, m - 1, d);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const days = Math.round((today - start) / 86400000);
+      let months = (today.getFullYear() - y) * 12 + (today.getMonth() - (m - 1));
+      if (today.getDate() < d) months--;
+      if (months < 0) months = 0;
+      const anchor = new Date(y, m - 1 + months, d);
+      const restDays = Math.max(0, Math.round((today - anchor) / 86400000));
+      return {
+        days, months, restDays,
+        started: days >= 0,
+        sinceText: `${y}/${m}/${d}`
+      };
+    }
+
     createApp({
       setup() {
+        // 每次進入（或重新整理）頁面就跳一次
+        const groupAgePopup = ref({ visible: true });
+        const groupAgeList = computed(() =>
+          GROUP_ANCHORS.map(g => ({ key: g.key, name: g.name, ...describeGroupAge(g.since) }))
+        );
+        const closeGroupAgePopup = () => { groupAgePopup.value.visible = false; };
+
         const savedWeeks = localStorage.getItem('sheetWeeks');
         const savedMembers = localStorage.getItem('sheetMembers');
         const savedGroups = localStorage.getItem('sheetGroups');
@@ -1945,6 +2004,7 @@
         };
 
         return {
+          groupAgePopup, groupAgeList, closeGroupAgePopup,
           weeks, members, newWeekName, newWeekDate, newMember,
           activeMembers, activeMembersPlain, exitedMembers,
           newMemberGroup, showHelp, loadState: cloudLoadState, retryLoad,
