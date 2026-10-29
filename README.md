@@ -6,7 +6,7 @@
 - **Firebase 專案：** gimnacio-de-chino
 - **登入方式：** 匿名登入
 - **狀態：** 使用中
-- **備註：** 資料在 `whatsappGroup` 集合（文件 `weeks` 等，每份資料存在 `data` 欄位）。
+- **備註：** 資料在 `whatsappGroup` 集合（文件 `weeks` 等，每份資料存在 `data` 欄位）。與 `note`（隨手貼）、`onedayoneword`（語料庫管理）共用此 Firebase 專案；改 Firestore 規則前要一併確認這三個。
 
 給 Claude：改這個工具前先讀這份。Ben 的規則：先討論、測好、問過才推（他說「推」才推）；用白話繁體中文說明。畫面風格是純**無印風**，不要用品牌色（磚紅、玉綠、金色）。
 
@@ -35,3 +35,16 @@
 
 - 資料寫入 Firebase 時，如果雲端資料沒讀到（載入失敗），整個畫面會鎖住並提示，避免舊資料覆蓋雲端。存檔採延遲合併。
 - 前端沒有帳號密碼，真正的防線是 **Firestore 安全規則**，請確認主控台的規則不是對所有人開放寫入。
+
+## 共用此 Firebase 專案的其他工具（改規則前先看）
+
+規則只存在 Firebase 主控台，**不在任何 repo 裡**。這個專案同時被三個工具使用，規則要同時放行下面這些路徑，漏掉哪個，那個工具就會讀寫失敗：
+
+| 工具 | 讀寫的 Firestore 路徑 | 登入方式 |
+|---|---|---|
+| 本工具（GimnaciodeChino） | `whatsappGroup/{文件}`（`weeks`、`members` 等） | 匿名登入 |
+| `note`（隨手貼） | `users/{uid}/clips/{筆記}`（含設定用的 `__settings__`） | Google 登入 |
+| `onedayoneword`（語料庫管理） | `vocabulary/main`、`sentences/main` | 沒有登入 |
+
+注意 `onedayoneword` 完全不登入，所以那兩份文件的規則如果要求登入，它就會壞掉；`note` 則一定要登入後、只能存取自己 uid 底下的資料。目前主控台上的規則實際長怎樣，這邊沒有紀錄，要進主控台確認。
+
